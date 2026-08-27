@@ -5,6 +5,16 @@ Designed for video editors and content creators who work with [DaVinci Resolve](
 
 ---
 
+## 📸 Screenshots
+
+**Splash Screen**  
+![Splash Screen](https://customer-assets-lqy194kg.emergentagent.net/wingman/81f10f81-6deb-4b51-8f1e-8ec1c413df5e/attachments/3abffaba12cc46af80bc8e564067dc5b_image.png)
+
+**Main Interface**  
+![Main Interface](https://customer-assets-lqy194kg.emergentagent.net/wingman/81f10f81-6deb-4b51-8f1e-8ec1c413df5e/attachments/f82a7b96ce484af28384361567cefe3d_image.png)
+
+---
+
 ## ✨ Features
 
 | Tab | Description |
