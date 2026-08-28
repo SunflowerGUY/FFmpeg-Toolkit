@@ -17,18 +17,28 @@ Designed for video editors and content creators who work with [DaVinci Resolve](
 
 ## ✨ Features
 
+### 🎬 Video
 | Tool | Description |
 |------|-------------|
 | **Quick Fix** | Remux video into a new container — copy all streams, no re-encode. First fix for files that won't import into DaVinci Resolve. |
 | **Stubborn Fix** | Same as Quick Fix but re-encodes audio to AAC 192k. Fixes incompatible audio codecs. |
+| **Fix Timestamps** | Regenerates corrupt/missing presentation timestamps (`-fflags +genpts`). Fixes stuttering or freezing footage. |
 | **Proxy Creator** | Creates a lightweight lower-resolution copy for smooth editing. Resolve switches back to the original at export — no quality loss. |
 | **ProRes Export** | Converts to Apple ProRes (LT / 422 / HQ / 4444) — DaVinci Resolve's preferred ingest format. |
-| **Fix Timestamps** | Regenerates corrupt/missing presentation timestamps (`-fflags +genpts`). Fixes stuttering or freezing footage. |
-| **Extract Audio** | Pulls the audio track as WAV (uncompressed) or AAC. |
-| **Strip Audio** | Removes all audio tracks, keeping video only. |
 | **Trim Clip** | Fast lossless trim by start time + duration — no re-encode. |
 | **Still Frame** | Exports a single frame at any timecode as PNG or JPEG. |
-| **Audio Accessibility** | Normalises or compresses audio dynamic range for editors who are hard of hearing or working with dialogue-heavy productions. Supports **Dynamic Normaliser** (`dynaudnorm`) and **Loudness Compression** (`loudnorm=I=-16:LRA=7:TP=-2`). |
+
+### 🎵 Audio
+| Tool | Description |
+|------|-------------|
+| **Extract Audio** | Pulls the audio track as WAV (uncompressed) or AAC. |
+| **Strip Audio** | Removes all audio tracks, keeping video only. |
+| **Audio Accessibility** | Normalises or compresses audio dynamic range. Supports **Dynamic Normaliser** (`dynaudnorm`) and **Loudness Compression** with selectable target (-14 LUFS Spotify/YouTube, -16 LUFS Apple Music, -23 LUFS Broadcast, -27 LUFS Netflix). |
+| **Batch Audio Convert** | Converts all audio files of a chosen format in a folder to a new format (WAV, MP3, FLAC, M4A, OGG, AC3). Auto-scans on folder select. MP3 output includes bitrate and VBR quality options. Saves results to a `CONVERTED/` subfolder. |
+
+### ⚙️ Tools
+| Tool | Description |
+|------|-------------|
 | **Custom Command** | Build your own FFmpeg command using a checkbox builder, or type/paste any command directly. |
 | **Inspect File** | Displays all stream info (codec, resolution, bitrate, audio format) without modifying the file. |
 | **Settings** | Set a default output folder and remember last-used input folder. |
@@ -103,3 +113,23 @@ MIT License — free to use, modify and distribute.
 [github.com/SunflowerGUY](https://github.com/SunflowerGUY)
 
 > Built to solve real-world DaVinci Resolve import headaches — and grown into a full FFmpeg toolbox.
+
+---
+
+## 📋 Changelog
+
+**v3.0** — 29 August 2026
+- Batch Audio Convert: folder-based bulk audio conversion (WAV/MP3/FLAC/M4A/OGG/AC3)
+- Audio Accessibility: selectable Target Loudness (-14/-16/-23/-27 LUFS)
+- Sidebar reorganised into VIDEO / AUDIO / TOOLS groups
+- Fixed duplicate file listing in Batch Audio Convert
+- Fixed CMD window flash on batch conversions (Windows)
+
+**v2.0** — 28 August 2026
+- Left sidebar navigation replacing horizontal tab bar
+- Audio Accessibility tab (Dynamic Normaliser + Loudness Compression)
+- New FF Toolbox icon, mini icon in title bar
+- Credits: Developed by Adrian Newington | Coding by Emergent.ai
+
+**v1.0** — 27 August 2026
+- Initial release with 12 tools
