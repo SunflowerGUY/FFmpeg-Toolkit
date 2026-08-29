@@ -191,6 +191,9 @@ MIT License — free to use, modify and distribute.
 
 ## 📋 Changelog
 
+**v3.0.1** — 29 August 2026
+- Fixed Batch Audio Convert: Bitrate/Quality row stays in correct position when switching formats or revisiting the panel
+
 **v3.0** — 29 August 2026
 - Batch Audio Convert: folder-based bulk audio conversion (WAV/MP3/FLAC/M4A/OGG/AC3)
 - Audio Accessibility: selectable Target Loudness (-14/-16/-23/-27 LUFS)
