@@ -8,10 +8,10 @@ Designed for content creators who work with Audio Editors, and Video Editors suc
 ## 📸 Screenshots
 
 **Splash Screen**  
-![Splash Screen](https://customer-assets-lqy194kg.emergentagent.net/wingman/81f10f81-6deb-4b51-8f1e-8ec1c413df5e/attachments/ce6ba3c9640340aab0d69c3edad7f063_image.png)
+![Splash Screen](https://customer-assets-lqy194kg.emergentagent.net/wingman/81f10f81-6deb-4b51-8f1e-8ec1c413df5e/attachments/31709b4d9f684e459493640d7311df52_screen%20grab%20-%201.jpg)
 
-**Main Interface — v3.0 with grouped sidebar**  
-![Main Interface](https://customer-assets-lqy194kg.emergentagent.net/wingman/81f10f81-6deb-4b51-8f1e-8ec1c413df5e/attachments/c52dc08e55e446308d4ca859d4ee73db_image.png)
+**Main Interface — v4 with grouped sidebar**  
+![Main Interface](https://customer-assets-lqy194kg.emergentagent.net/wingman/81f10f81-6deb-4b51-8f1e-8ec1c413df5e/attachments/9804de1af6b14661a6269954c3ab174f_screen%20grab%20-%202.jpg)
 
 ---
 
@@ -190,6 +190,9 @@ MIT License — free to use, modify and distribute.
 ---
 
 ## 📋 Changelog
+
+**v4** — 30 August 2026
+- User edits and refinements
 
 **v3.0.1** — 29 August 2026
 - Fixed Batch Audio Convert: Bitrate/Quality row stays in correct position when switching formats or revisiting the panel
