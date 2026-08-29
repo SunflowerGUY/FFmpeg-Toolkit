@@ -1,7 +1,7 @@
 # FFmpeg Toolkit 🎬🔧
 
-A feature-rich, dark-themed desktop GUI for [FFmpeg](https://ffmpeg.org/) built with Python and CustomTkinter.  
-Designed for video editors and content creators who work with [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve) — fix, convert, inspect and process video files without touching the command line.
+A Vibe Coded, feature-rich, dark-themed desktop GUI for [FFmpeg](https://ffmpeg.org/) built with Python and CustomTkinter.  
+Designed for content creators who work with Audio Editors, and Video Editors such as [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve) — fix, convert, inspect and process video files without touching the command line.
 
 ---
 
