@@ -1,7 +1,10 @@
 # Changelog
 
+## v4 — 30 August 2026
+- Code efficiency improvements and refactoring (no functional changes)
+
 ## v3.0.1 — 29 August 2026
-- Fixed Batch Audio Convert: Bitrate/Quality row now stays in correct position when switching formats or revisiting the panel
+- Fixed Batch Audio Convert: Bitrate/Quality row now stays in correct position when switching output formats or revisiting the panel
 
 ## v3.0 — 29 August 2026
 - Batch Audio Convert: folder-based bulk audio conversion (WAV/MP3/FLAC/M4A/OGG/AC3)
