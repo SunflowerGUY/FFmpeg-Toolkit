@@ -1,7 +1,7 @@
 # FFmpeg Toolkit 🎬🔧
 
-A "Vibe Coded" feature-rich, dark-themed desktop GUI for [FFmpeg](https://ffmpeg.org/) built with Python and CustomTkinter.  
-Designed for video editors and content creators who work with [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve) — and Audio editors, to fix, convert, inspect and process video files without touching the command line.
+A feature-rich, dark-themed desktop GUI for [FFmpeg](https://ffmpeg.org/) built with Python and CustomTkinter.  
+Designed for video editors and content creators who work with [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve) — fix, convert, inspect and process video files without touching the command line.
 
 ---
 
@@ -69,13 +69,86 @@ python ffmpeg_toolkit.py
 3. Find `FFmpeg_Toolkit.exe` in the `dist/` folder
 4. Copy `FFmpeg_Toolkit.exe` + `ffmpeg.exe` anywhere — no installation needed
 
-### Option C — Build on Linux (e.g. Linux Mint)
+<details>
+<summary>🐧 <strong>Linux Installation Guide (click to expand)</strong></summary>
+
+### Prerequisites
+First, make sure FFmpeg and Python are installed:
+```bash
+sudo apt update
+sudo apt install python3 python3-venv ffmpeg
+```
+
+---
+
+### Step 1 — Get the files
+Download `ffmpeg_toolkit.py` from this repository and place it in a folder of your choice:
+```bash
+mkdir ~/FFmpeg-Toolkit
+cd ~/FFmpeg-Toolkit
+# copy or download ffmpeg_toolkit.py into this folder
+```
+
+---
+
+### Step 2 — Create a virtual environment
 ```bash
 python3 -m venv ~/ffmpeg-build-env
+```
+> 💡 A virtual environment is an isolated Python workspace — it keeps your project's packages separate from the rest of your system. You only need to create it once.
+
+---
+
+### Step 3 — Activate the virtual environment
+```bash
 source ~/ffmpeg-build-env/bin/activate
+```
+> Your terminal prompt will change to show `(ffmpeg-build-env)` — this confirms it is active.
+
+---
+
+### Step 4 — Install required packages
+```bash
 pip install customtkinter Pillow pyinstaller
+```
+
+---
+
+### Step 5 — Navigate to your app folder
+```bash
+cd ~/FFmpeg-Toolkit
+```
+> ⚠️ You must be inside the folder containing `ffmpeg_toolkit.py` before running the build command.
+
+---
+
+### Step 6 — Build the executable
+```bash
 python -m PyInstaller --onefile --windowed --name FFmpeg_Toolkit --collect-data customtkinter ffmpeg_toolkit.py
 ```
+> This may take a minute or two. When complete, your executable will be at `dist/FFmpeg_Toolkit`.
+
+---
+
+### Step 7 — Link FFmpeg
+```bash
+ln -s $(which ffmpeg) ~/FFmpeg-Toolkit/dist/ffmpeg.exe
+```
+> This creates a shortcut so the app can find FFmpeg in the same folder as the executable.
+
+---
+
+### Step 8 — Run the app
+```bash
+~/FFmpeg-Toolkit/dist/FFmpeg_Toolkit
+```
+Or double-click `FFmpeg_Toolkit` in your file manager.
+
+---
+
+> **Next time you want to run it** — just launch the executable directly. No need to repeat the build steps.
+
+</details>
 
 ---
 
