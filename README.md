@@ -72,7 +72,7 @@ python ffmpeg_toolkit.py
 <details>
 <summary>🐧 <strong>Linux Installation Guide (click to expand)</strong></summary>
 
-### Prerequisites
+### Linux Prerequisites
 First, make sure FFmpeg and Python are installed:
 ```bash
 sudo apt update
@@ -81,7 +81,7 @@ sudo apt install python3 python3-venv ffmpeg
 
 ---
 
-### Step 1 — Get the files
+### Linux Step 1 — Get the files
 Download `ffmpeg_toolkit.py` from this repository and place it in a folder of your choice:
 ```bash
 mkdir ~/FFmpeg-Toolkit
@@ -91,7 +91,7 @@ cd ~/FFmpeg-Toolkit
 
 ---
 
-### Step 2 — Create a virtual environment
+### Linux Step 2 — Create a virtual environment
 ```bash
 python3 -m venv ~/ffmpeg-build-env
 ```
@@ -99,7 +99,7 @@ python3 -m venv ~/ffmpeg-build-env
 
 ---
 
-### Step 3 — Activate the virtual environment
+### Linux Step 3 — Activate the virtual environment
 ```bash
 source ~/ffmpeg-build-env/bin/activate
 ```
@@ -107,14 +107,14 @@ source ~/ffmpeg-build-env/bin/activate
 
 ---
 
-### Step 4 — Install required packages
+### Linux Step 4 — Install required packages
 ```bash
 pip install customtkinter Pillow pyinstaller
 ```
 
 ---
 
-### Step 5 — Navigate to your app folder
+### Linux Step 5 — Navigate to your app folder
 ```bash
 cd ~/FFmpeg-Toolkit
 ```
@@ -122,7 +122,7 @@ cd ~/FFmpeg-Toolkit
 
 ---
 
-### Step 6 — Build the executable
+### Linux Step 6 — Build the executable
 ```bash
 python -m PyInstaller --onefile --windowed --name FFmpeg_Toolkit --collect-data customtkinter ffmpeg_toolkit.py
 ```
@@ -130,7 +130,7 @@ python -m PyInstaller --onefile --windowed --name FFmpeg_Toolkit --collect-data 
 
 ---
 
-### Step 7 — Link FFmpeg
+### Linux Step 7 — Link FFmpeg
 ```bash
 ln -s $(which ffmpeg) ~/FFmpeg-Toolkit/dist/ffmpeg.exe
 ```
@@ -138,7 +138,7 @@ ln -s $(which ffmpeg) ~/FFmpeg-Toolkit/dist/ffmpeg.exe
 
 ---
 
-### Step 8 — Run the app
+### Linux Step 8 — Run the app
 ```bash
 ~/FFmpeg-Toolkit/dist/FFmpeg_Toolkit
 ```
