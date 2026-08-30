@@ -1,9 +1,9 @@
 @echo off
 setlocal
 
-echo ===================================================
+echo ============================================
 echo  FFmpeg Toolkit - PyInstaller Build Script
-echo ===================================================
+echo ============================================
 echo.
 
 REM --- Install required packages ---
@@ -30,7 +30,6 @@ echo.
 
 REM --- Run PyInstaller ---
 echo [3/4] Running PyInstaller...
-REM Place icon_source.jpg and ffmpeg.exe in the same folder as FFmpeg_Toolkit.exe
 python -m PyInstaller ^
     --onefile ^
     --windowed ^
@@ -51,10 +50,12 @@ echo [4/4] Build complete!
 echo.
 echo  Output: dist\FFmpeg_Toolkit.exe
 echo.
+REM Place icon_source.jpg and ffmpeg.exe in the same folder as FFmpeg_Toolkit.exe
 echo  To distribute:
 echo    1. Copy dist\FFmpeg_Toolkit.exe to your target folder.
-echo    2. Place ffmpeg.exe in the SAME tolder as FFmpeg_Toolkit.exe.
-echo    3. Double-click FFmpeg_Toolkit.exe to run.
+echo    2. Place ffmpeg.exe in the SAME folder as FFmpeg_Toolkit.exe.
+echo    3. Place icon_source.jpg in the SAME folder (for the welcome splash).
+echo    4. Double-click FFmpeg_Toolkit.exe to run.
 echo.
-echo ===================================================
+echo ============================================
 pause
