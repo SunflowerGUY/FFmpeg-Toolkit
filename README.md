@@ -57,17 +57,24 @@ Designed for content creators who work with Audio Editors, and Video Editors suc
 
 ## 🚀 Quick Start
 
-### Option A — Run from source
+### Option A
+Download the pre-compiled portable Windows EXEcutable file.
+(Click on Releases, and then scroll down to Assets of the most recent release.)
+NOTE 1: you'll also need to place a copy of FFMpeg.exe in the same folder as the portable EXEcutable.
+NOTE 2: In some cases, a pre-existing copy of FFMpeg on your computer may be found and utilised by this app.
+
+### Option B — If you prefer, Build a standalone executable (Windows)
+1. Download & Extract the contents of the `FFmpeg-Toolkit-main.zip` file in the desired location.
+2. Double-click `build.bat`
+3. You will then find `FFmpeg_Toolkit.exe` in the newly created  `dist/` folder.
+4. NOTE: Since this app is portable, copy `FFmpeg_Toolkit.exe` + `ffmpeg.exe` to any folder location of your choice — no installation needed.
+
+### Option C — Run from source
 ```bash
 pip install customtkinter Pillow
 python ffmpeg_toolkit.py
 ```
 
-### Option B — Build a standalone executable (Windows)
-1. Place `ffmpeg.exe` in the project folder
-2. Double-click `build.bat`
-3. Find `FFmpeg_Toolkit.exe` in the `dist/` folder
-4. Copy `FFmpeg_Toolkit.exe` + `ffmpeg.exe` anywhere — no installation needed
 
 <details>
 <summary>🐧 <strong>Linux Installation Guide (click to expand)</strong></summary>
