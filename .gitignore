@@ -1,0 +1,20 @@
+# Build output (upload the EXE to a GitHub Release instead)
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# FFmpeg binaries (too large for GitHub, and separately licensed)
+ffmpeg.exe
+ffprobe.exe
+ffplay.exe
+FFMPEG.exe
+
+# Personal settings and run output
+FFT-settings.json
+settings.json
+FF-Toolkit Conversion Report.txt
