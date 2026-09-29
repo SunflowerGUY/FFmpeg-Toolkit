@@ -11,6 +11,7 @@ import pathlib
 import subprocess
 import tempfile
 import threading
+import queue
 import webbrowser
 import tkinter as tk
 import customtkinter as ctk
@@ -18,8 +19,159 @@ from tkinter import filedialog, messagebox, Menu, ttk
 from PIL import Image as PilImage, ImageDraw, ImageTk
 
 
-APP_VERSION = "9.2.W"
-BUILD_DATE = "27 September 2026"
+APP_VERSION = "10.0.W"
+BUILD_DATE = "29 September 2026"
+
+# ---------------------------------------------------------------- dashboard look
+# Palette from JJ's Battery Health Analyser (ui_theme.py), so the apps match.
+BG = "#0b1020"          # window background
+CARD = "#151c33"        # panels ("cards")
+CARD_2 = "#1b2442"      # raised items inside cards: buttons, headers
+INSET = "#0f1529"       # sunken areas: log boxes
+BORDER = "#2a3458"
+TEXT = "#e6e9f5"
+MUTED = "#8b93b5"
+DISABLED = "#566086"
+BLUE = "#3d8bff"
+BLUE_HOVER = "#5a9dff"
+PURPLE = "#8b5cf6"
+GREEN = "#34d399"
+AMBER = "#fbbf24"
+RED = "#f87171"
+SELECTED = "#223b6c"    # blue tint on CARD: selected sidebar item, dropdown hover
+HOVER = "#24305a"
+SCROLL = "#353c56"
+SCROLL_HOVER = "#4c5370"
+ABORT = "#b4234a"
+ABORT_HOVER = "#db2777"
+WARN_FILL = "#3e3930"   # amber tint on CARD, for warning buttons
+WARN_HOVER = "#554a33"
+FAINT = "#6b7599"       # small print (credits, trademark lines)
+LINK = "#8fb8ff"        # links and hint text
+UI_FONT = "Segoe UI" if sys.platform == "win32" else None
+
+
+def apply_dashboard_theme():
+    """Load CustomTkinter's dark-blue theme, then recolour it with the dashboard
+    palette. Every widget made afterwards picks it up, so all tools share the look
+    without each one being edited. Must run before the main window is created."""
+    ctk.set_appearance_mode("dark")
+    ctk.set_default_color_theme("dark-blue")
+    theme = ctk.ThemeManager.theme
+
+    def put(widget, **values):
+        for key, value in values.items():
+            theme[widget][key] = [value, value] if isinstance(value, str) and value != "transparent" else value
+
+    put("CTk", fg_color=BG)
+    put("CTkToplevel", fg_color=BG)
+    put("CTkFrame", corner_radius=12, fg_color=CARD, top_fg_color=CARD_2, border_color=BORDER)
+    put("CTkButton", corner_radius=8, border_width=1, fg_color=CARD_2, hover_color=HOVER,
+        border_color=BORDER, text_color=TEXT, text_color_disabled=DISABLED)
+    put("CTkLabel", text_color=TEXT)
+    put("CTkEntry", corner_radius=8, border_width=1, fg_color=CARD, border_color=BORDER,
+        text_color=TEXT, placeholder_text_color=MUTED)
+    put("CTkCheckBox", corner_radius=5, border_width=2, fg_color=BLUE, border_color=MUTED,
+        hover_color=BLUE_HOVER, checkmark_color="#ffffff", text_color=TEXT, text_color_disabled=DISABLED)
+    put("CTkSwitch", fg_color=BORDER, progress_color=BLUE, button_color=TEXT,
+        button_hover_color="#ffffff", text_color=TEXT, text_color_disabled=DISABLED)
+    put("CTkRadioButton", fg_color=BLUE, border_color=MUTED, hover_color=BLUE_HOVER,
+        text_color=TEXT, text_color_disabled=DISABLED)
+    put("CTkProgressBar", fg_color=CARD_2, progress_color=BLUE, border_color=BORDER)
+    put("CTkSlider", fg_color=CARD_2, progress_color=BLUE, button_color=BLUE, button_hover_color=BLUE_HOVER)
+    put("CTkOptionMenu", corner_radius=8, fg_color=CARD_2, button_color=CARD_2, button_hover_color=HOVER,
+        text_color=TEXT, text_color_disabled=DISABLED)
+    put("CTkComboBox", corner_radius=8, border_width=1, fg_color=CARD, border_color=BORDER,
+        button_color=BORDER, button_hover_color=MUTED, text_color=TEXT, text_color_disabled=DISABLED)
+    put("CTkScrollbar", button_color=SCROLL, button_hover_color=SCROLL_HOVER)
+    put("CTkSegmentedButton", corner_radius=8, border_width=2, fg_color=CARD_2, selected_color=BLUE,
+        selected_hover_color=BLUE_HOVER, unselected_color=CARD_2, unselected_hover_color=HOVER,
+        text_color=TEXT, text_color_disabled=DISABLED)
+    put("CTkTextbox", corner_radius=10, border_width=1, fg_color=INSET, border_color=BORDER, text_color=TEXT,
+        scrollbar_button_color=SCROLL, scrollbar_button_hover_color=SCROLL_HOVER)
+    put("CTkScrollableFrame", label_fg_color=CARD_2)
+    put("DropdownMenu", fg_color=CARD_2, hover_color=SELECTED, text_color=TEXT)
+    if UI_FONT:
+        theme["CTkFont"]["family"] = UI_FONT
+
+
+def dashboard_card(parent, title=None, **pack):
+    """A rounded dark panel like the Battery Monitor's cards. Returns (card, body):
+    put widgets in body. The card is packed with `pack` (default: fill x)."""
+    card = ctk.CTkFrame(parent, fg_color=CARD, border_width=1, border_color=BORDER, corner_radius=14)
+    card.pack(**(pack or {"fill": "x", "pady": (0, 10)}))
+    body = ctk.CTkFrame(card, fg_color="transparent")
+    body.pack(fill="both", expand=True, padx=16, pady=(10 if title else 12, 12))
+    if title:
+        ctk.CTkLabel(body, text=title, font=ctk.CTkFont(size=14, weight="bold"),
+                     anchor="w").pack(fill="x", pady=(0, 6))
+    return card, body
+
+
+def status_chip(parent):
+    """Pill holding a status dot and its text (e.g. "ffmpeg found"). Returns (dot, label)."""
+    chip = ctk.CTkFrame(parent, fg_color=CARD, border_width=1, border_color=BORDER, corner_radius=12)
+    chip.pack(side="left", padx=(8, 0))
+    dot = ctk.CTkLabel(chip, text="\u25cf", font=ctk.CTkFont(size=12), width=14)
+    dot.pack(side="left", padx=(10, 4), pady=2)
+    label = ctk.CTkLabel(chip, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
+    label.pack(side="left", padx=(0, 12), pady=2)
+    return dot, label
+
+
+class ActivityBar(ctk.CTkProgressBar):
+    """Indeterminate progress bar that is invisible while idle: at rest a CTk
+    indeterminate bar still shows a bright segment, which looks like activity."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._idle()
+
+    def _idle(self):
+        # Only an idle *indeterminate* bar is hidden; a determinate one shows its %.
+        if self.cget("mode") == "indeterminate":
+            super().configure(progress_color=self.cget("fg_color"))
+        else:
+            super().configure(progress_color=BLUE)
+
+    def configure(self, require_redraw=False, **kwargs):
+        super().configure(require_redraw=require_redraw, **kwargs)
+        if "mode" in kwargs:
+            self._idle()
+
+    def start(self):
+        super().configure(progress_color=BLUE)
+        super().start()
+
+    def stop(self):
+        super().stop()
+        self._idle()
+
+
+class AccentButton(ctk.CTkButton):
+    """Coloured action button (Run = blue, Abort = crimson) that turns dark
+    while disabled, like the Battery Monitor's buttons, so it doesn't look
+    clickable when it isn't."""
+
+    COLOURS = {"primary": (BLUE, BLUE_HOVER), "danger": (ABORT, ABORT_HOVER)}
+
+    def __init__(self, *args, kind="primary", **kwargs):
+        self._accent, hover = self.COLOURS[kind]
+        kwargs.setdefault("font", ctk.CTkFont(size=14, weight="bold"))
+        kwargs.setdefault("height", 36)
+        super().__init__(*args, hover_color=hover, border_width=0, text_color="#ffffff",
+                         text_color_disabled=DISABLED, **kwargs)
+        self._apply_state()
+
+    def _apply_state(self):
+        disabled = self.cget("state") == "disabled"
+        super().configure(fg_color="#232b4a" if disabled else self._accent)
+
+    def configure(self, require_redraw=False, **kwargs):
+        super().configure(require_redraw=require_redraw, **kwargs)
+        if "state" in kwargs:
+            self._apply_state()
+
 
 MIN_RECOMMENDED_FFMPEG_MAJOR = 4
 OLD_FFMPEG_ERROR_SIGNATURES = ("Unrecognized option", "Option not found", "Unrecognised option")
@@ -144,8 +296,8 @@ class CTkRangeSlider(ctk.CTkFrame):
         command=None,
         width=400,
         height=36,
-        track_color="#2b2b2b",
-        range_color="#1f6aa5",
+        track_color=BORDER,
+        range_color=BLUE,
         handle_color="#ffffff",
         handle_radius=9,
         **kwargs,
@@ -312,8 +464,9 @@ class CTkToolTip:
 
         label = tk.Label(
             tw, text=self.text, justify="left",
-            background="#1f1f1f", foreground="#f2f2f2",
-            relief="solid", borderwidth=1,
+            background=CARD_2, foreground=TEXT,
+            relief="flat", borderwidth=0, highlightthickness=1,
+            highlightbackground=BORDER, highlightcolor=BORDER,
             font=("Segoe UI", 9), padx=8, pady=4,
         )
         label.pack()
@@ -339,19 +492,22 @@ class FFmpegToolkit(ctk.CTk):
 
         self.title(f"FFmpeg Toolkit - (ver: {APP_VERSION} - build: {BUILD_DATE})")
 
-        icon_path = (
-            pathlib.Path(sys.executable).parent / "app_icon.ico"
-            if getattr(sys, "frozen", False)
-            else pathlib.Path(__file__).parent / "app_icon.ico"
-        )
+        # The .exe carries its own copy of the icon (build.bat bundles it with
+        # --add-data), unpacked to sys._MEIPASS; a loose app_icon.ico next to
+        # the .exe is still used if the bundled one is missing.
+        if getattr(sys, "frozen", False):
+            icon_path = pathlib.Path(getattr(sys, "_MEIPASS", "")) / "app_icon.ico"
+            if not icon_path.exists():
+                icon_path = pathlib.Path(sys.executable).parent / "app_icon.ico"
+        else:
+            icon_path = pathlib.Path(__file__).parent / "app_icon.ico"
         if icon_path.exists():
             self.iconbitmap(str(icon_path))
 
         self.geometry("1150x720")
         self.minsize(950, 600)
 
-        ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("dark-blue")
+        # The dashboard theme is applied before this window is created (see __main__).
 
         if getattr(sys, "frozen", False):
             self._app_dir = os.path.dirname(sys.executable)
@@ -417,15 +573,41 @@ class FFmpegToolkit(ctk.CTk):
         self._trim_play_window_title = None
         self._trim_play_hwnd = None
         self._abort_event = threading.Event()
+        # Worker threads must never touch Tk widgets directly (on Linux/X11
+        # that crashes the app). They queue callables here instead, and
+        # _pump_ui_queue runs them on the main thread.
+        self._ui_queue = queue.Queue()
         self._operation_running = False
         self._old_ffmpeg_warning_shown = False
         self._last_run_suspected_old_ffmpeg = False
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
+        self._pump_job = self.after(30, self._pump_ui_queue)
+
+    def _run_on_main(self, fn):
+        """Thread-safe way to run fn on the Tk main thread."""
+        self._ui_queue.put(fn)
+
+    def _pump_ui_queue(self):
+        # Cap the work per tick so a flood of ffmpeg output can't freeze the UI.
+        for _ in range(500):
+            try:
+                fn = self._ui_queue.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                fn()
+            except Exception as exc:
+                print(f"UI callback error: {exc}", file=sys.stderr)
+        self._pump_job = self.after(30, self._pump_ui_queue)
 
     def _on_app_close(self):
         self._stop_trim_playback()
+        try:
+            self.after_cancel(self._pump_job)
+        except (AttributeError, tk.TclError):
+            pass
         self.destroy()
 
     def _stop_trim_playback(self):
@@ -731,7 +913,7 @@ class FFmpegToolkit(ctk.CTk):
         if detail:
             ctk.CTkLabel(
                 dialog, text=detail, wraplength=380, justify="center",
-                font=ctk.CTkFont(size=11), text_color="#888888",
+                font=ctk.CTkFont(size=11), text_color=MUTED,
             ).pack(padx=25, pady=(0, 10))
 
         ctk.CTkButton(
@@ -762,13 +944,13 @@ class FFmpegToolkit(ctk.CTk):
         status_label.configure(
             text=(f"Currently using: {resolved}" if resolved
                   else "Not found -- checked app folder, then system PATH, then this setting."),
-            text_color="#888888" if resolved else "#e8a020",
+            text_color=MUTED if resolved else AMBER,
         )
 
     def _set_ffmpeg_status(self, found):
         self._ffmpeg_ok = found
         if found:
-            self._status_dot.configure(text_color="#2ecc71")
+            self._status_dot.configure(text_color=GREEN)
             self._status_label.configure(text="ffmpeg found")
         else:
             self._status_label.configure(text="ffmpeg not found -- set it in Settings")
@@ -777,10 +959,10 @@ class FFmpegToolkit(ctk.CTk):
 
     def _set_ffprobe_status(self, found):
         if found:
-            self._ffprobe_status_dot.configure(text_color="#2ecc71")
+            self._ffprobe_status_dot.configure(text_color=GREEN)
             self._ffprobe_status_label.configure(text="ffprobe found")
         else:
-            self._ffprobe_status_dot.configure(text_color="#e8a020")
+            self._ffprobe_status_dot.configure(text_color=AMBER)
             self._ffprobe_status_label.configure(text="ffprobe not found")
 
     def _set_sidebar_enabled(self, enabled):
@@ -820,8 +1002,17 @@ class FFmpegToolkit(ctk.CTk):
             popup.geometry(f"320x140+{max(0, pos_x)}+{max(0, pos_y)}")
 
             popup.transient(self)
-            popup.grab_set()
             popup.protocol("WM_DELETE_WINDOW", lambda: None)
+
+            # On Linux, grab_set() fails on a window that isn't mapped yet,
+            # which used to leave this popup orphaned. Grab once it's visible.
+            def safe_grab():
+                try:
+                    if popup.winfo_exists():
+                        popup.grab_set()
+                except tk.TclError:
+                    pass
+            popup.after(100, safe_grab)
 
             lbl = ctk.CTkLabel(
                 popup,
@@ -885,7 +1076,7 @@ class FFmpegToolkit(ctk.CTk):
             while self._operation_running and (time.time() - start_time < 5.0):
                 time.sleep(0.05)
 
-            self.after(0, self._close_abort_popup)
+            self._run_on_main(self._close_abort_popup)
 
         threading.Thread(target=kill_worker, daemon=True).start()
 
@@ -893,7 +1084,7 @@ class FFmpegToolkit(ctk.CTk):
         if getattr(self, "_ffmpeg_ok", False):
             return
         self._blink_on = not getattr(self, "_blink_on", False)
-        self._status_dot.configure(text_color="#e74c3c" if self._blink_on else "#4a1410")
+        self._status_dot.configure(text_color=RED if self._blink_on else "#4a1a28")
         self.after(600, self._blink_status_dot)
 
     def _load_settings(self):
@@ -942,17 +1133,51 @@ class FFmpegToolkit(ctk.CTk):
             self._settings["last_input_folder"] = os.path.dirname(path)
             self._save_settings()
 
-    def _build_menu_bar(self):
-        menubar = Menu(self)
+    def _dark_menu(self):
+        """A drop-down / right-click menu in the dashboard colours."""
+        return Menu(
+            self, tearoff=0, bg=CARD_2, fg=TEXT, activebackground=SELECTED,
+            activeforeground="#ffffff", disabledforeground=DISABLED,
+            borderwidth=1, relief="flat", activeborderwidth=0,
+            font=(UI_FONT or "TkMenuFont", 10),
+        )
 
-        file_menu = Menu(menubar, tearoff=0)
+    def _build_menu_bar(self):
+        # Windows draws the native menu bar itself, always light, so the menu
+        # bar is a strip of buttons that open dark drop-down menus instead.
+        strip = self._menu_strip
+
+        def add_menu(label, menu, key):
+            btn = ctk.CTkButton(
+                strip, text=label, width=10, height=26, corner_radius=6,
+                fg_color="transparent", hover_color=CARD_2, border_width=0,
+                text_color=TEXT, font=ctk.CTkFont(size=13),
+            )
+            btn.pack(side="left", padx=(0, 2))
+
+            def open_menu(_event=None):
+                btn.configure(fg_color=CARD_2)
+                try:
+                    menu.tk_popup(btn.winfo_rootx(), btn.winfo_rooty() + btn.winfo_height() + 2)
+                    menu.grab_release()
+                    btn.configure(fg_color="transparent")
+                except tk.TclError:
+                    pass  # the window was closed while the menu was open
+                return "break"
+
+            btn.configure(command=open_menu)
+            self.bind_all(f"<Alt-{key}>", open_menu)
+            self.bind_all(f"<Alt-{key.upper()}>", open_menu)
+
+        file_menu = self._dark_menu()
         file_menu.add_command(label="About",
                               command=lambda: self._build_welcome_splash(at_startup=False))
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.destroy)
-        menubar.add_cascade(label="File", menu=file_menu)
+        # Close after the menu has finished closing, not from inside it.
+        file_menu.add_command(label="Exit", command=lambda: self.after(10, self._on_app_close))
+        add_menu("File", file_menu, "f")
 
-        operations_menu = Menu(menubar, tearoff=0)
+        operations_menu = self._dark_menu()
         mnemonic_letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         item_index = 0
         for section_index, (_section_label, items) in enumerate(self._tool_sections):
@@ -966,12 +1191,14 @@ class FFmpegToolkit(ctk.CTk):
                     label=label, underline=0,
                     command=lambda n=name: self._show_panel(n)
                 )
-        menubar.add_cascade(label="Operations", menu=operations_menu)
-        self.configure(menu=menubar)
+        add_menu("Operations", operations_menu, "o")
 
     def _build_ui(self):
+        self._menu_strip = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
+        self._menu_strip.pack(fill="x", padx=8, pady=(4, 0))
+
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
-        top_frame.pack(fill="x", padx=15, pady=(10, 5))
+        top_frame.pack(fill="x", padx=16, pady=(6, 10))
 
         self._add_title_icon(top_frame)
 
@@ -986,46 +1213,27 @@ class FFmpegToolkit(ctk.CTk):
             top_frame,
             text=f"  {APP_VERSION} - {BUILD_DATE}",
             font=ctk.CTkFont(size=12),
-            text_color="#999999",
+            text_color=MUTED,
         )
         version_label.pack(side="left", anchor="s", pady=(0, 3))
 
         status_frame = ctk.CTkFrame(top_frame, fg_color="transparent")
         status_frame.pack(side="right")
 
-        self._status_dot = ctk.CTkLabel(
-            status_frame, text="\u25cf", font=ctk.CTkFont(size=14)
-        )
-        self._status_dot.pack(side="left", padx=(0, 5))
-
-        self._status_label = ctk.CTkLabel(
-            status_frame, text="", font=ctk.CTkFont(size=12)
-        )
-        self._status_label.pack(side="left")
-
-        self._ffprobe_status_dot = ctk.CTkLabel(
-            status_frame, text="\u25cf", font=ctk.CTkFont(size=14)
-        )
-        self._ffprobe_status_dot.pack(side="left", padx=(14, 5))
-
-        self._ffprobe_status_label = ctk.CTkLabel(
-            status_frame, text="", font=ctk.CTkFont(size=12)
-        )
-        self._ffprobe_status_label.pack(side="left")
+        self._status_dot, self._status_label = status_chip(status_frame)
+        self._ffprobe_status_dot, self._ffprobe_status_label = status_chip(status_frame)
 
         body_frame = ctk.CTkFrame(self, fg_color="transparent")
         body_frame.pack(fill="both", expand=True, padx=0, pady=0)
 
         sidebar = ctk.CTkScrollableFrame(
-            body_frame, width=190, corner_radius=0,
-            fg_color=["#1a1a1a", "#1a1a1a"],
-            scrollbar_button_color="#333333",
-            scrollbar_button_hover_color="#4a4a4a",
+            body_frame, width=190, corner_radius=14,
+            fg_color=CARD, border_width=1, border_color=BORDER,
         )
-        sidebar.pack(side="left", fill="y")
+        sidebar.pack(side="left", fill="y", padx=(12, 0), pady=(0, 12))
 
         self._content_panel = ctk.CTkFrame(body_frame, fg_color="transparent")
-        self._content_panel.pack(side="left", fill="both", expand=True, padx=(8, 12), pady=0)
+        self._content_panel.pack(side="left", fill="both", expand=True, padx=12, pady=(0, 12))
 
         self._panels = {}
         self._nav_buttons = {}
@@ -1042,9 +1250,9 @@ class FFmpegToolkit(ctk.CTk):
             self._restore_empty_help(self._panels[name])
             for btn_name, btn in self._nav_buttons.items():
                 if btn_name == name:
-                    btn.configure(fg_color="#1f538d", text_color="white")
+                    btn.configure(fg_color=SELECTED, text_color="#ffffff")
                 else:
-                    btn.configure(fg_color="transparent", text_color="#cccccc")
+                    btn.configure(fg_color="transparent", text_color=TEXT)
 
         self._show_panel = _show_panel
 
@@ -1087,35 +1295,33 @@ class FFmpegToolkit(ctk.CTk):
         for name, _icon, builder in self._utility_items:
             _build_panel(name, builder)
 
-        ctk.CTkLabel(sidebar, text="FFmpeg Toolkit",
-                     font=ctk.CTkFont(size=13, weight="bold"),
-                     text_color="#888888").pack(pady=(14, 6), padx=12, anchor="w")
+        ctk.CTkLabel(sidebar, text="Tools",
+                     font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(10, 2), padx=10, anchor="w")
 
         def _add_nav_button(name, icon):
             btn = ctk.CTkButton(
                 sidebar, text=f"  {icon}  {name}",
                 font=ctk.CTkFont(size=12),
-                anchor="w", width=190, height=34,
-                corner_radius=0,
+                anchor="w", width=180, height=32,
+                corner_radius=8, border_width=0,
                 fg_color="transparent",
-                text_color="#cccccc",
-                hover_color="#2a2a2a",
+                text_color=TEXT,
+                hover_color=CARD_2,
                 command=lambda n=name: _show_panel(n)
             )
-            btn.pack(fill="x")
+            btn.pack(fill="x", padx=4, pady=1)
             self._nav_buttons[name] = btn
 
         for section_label, items in self._tool_sections:
             ctk.CTkLabel(sidebar, text=section_label,
                          font=ctk.CTkFont(size=10, weight="bold"),
-                         text_color="#555555", anchor="w").pack(
-                         fill="x", padx=12, pady=(8, 1))
+                         text_color=MUTED, anchor="w").pack(
+                         fill="x", padx=10, pady=(10, 2))
             for name, icon, _builder in items:
                 _add_nav_button(name, icon)
 
-        ctk.CTkLabel(sidebar, text="\u2500" * 22,
-                     text_color="#333333",
-                     font=ctk.CTkFont(size=9)).pack(pady=(6, 2), padx=8)
+        ctk.CTkFrame(sidebar, height=1, fg_color=BORDER, corner_radius=0).pack(
+            fill="x", padx=10, pady=(10, 6))
 
         for name, icon, _builder in self._utility_items:
             _add_nav_button(name, icon)
@@ -1169,7 +1375,7 @@ class FFmpegToolkit(ctk.CTk):
             existing.lift()
             return
 
-        welcome_frame = ctk.CTkFrame(self, fg_color="#1a1a1a", corner_radius=0)
+        welcome_frame = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
         welcome_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
         welcome_frame.lift()
         self._welcome_frame = welcome_frame
@@ -1207,7 +1413,7 @@ class FFmpegToolkit(ctk.CTk):
         lbl_title.bind("<Button-1>", _dismiss_welcome)
 
         lbl_click = ctk.CTkLabel(inner, text=f"Click anywhere to {verb}",
-            font=ctk.CTkFont(size=14), text_color="#888888")
+            font=ctk.CTkFont(size=14), text_color=MUTED)
         lbl_click.pack(pady=(8, 0))
         lbl_click.bind("<Button-1>", _dismiss_welcome)
 
@@ -1215,15 +1421,17 @@ class FFmpegToolkit(ctk.CTk):
         if not ffmpeg_found:
             lbl_warn = ctk.CTkLabel(inner,
                 text="\u26A0\uFE0F  ffmpeg not found -- place it next to this app, add it to PATH, or set it in Settings",
-                font=ctk.CTkFont(size=12), text_color="#e8a020")
+                font=ctk.CTkFont(size=12), text_color=AMBER)
             lbl_warn.pack(pady=(12, 0))
 
         ctk.CTkButton(
             inner,
             text=f"Click here to {verb}  \u25B6",
             font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color="#c0392b",
-            hover_color="#e74c3c",
+            fg_color=BLUE,
+            hover_color=BLUE_HOVER,
+            border_width=0,
+            text_color="#ffffff",
             corner_radius=8,
             command=_dismiss_welcome
         ).pack(pady=(22, 0), ipadx=10, ipady=4)
@@ -1232,28 +1440,28 @@ class FFmpegToolkit(ctk.CTk):
             inner,
             text=f"Version {APP_VERSION}  \u2022  Built {BUILD_DATE}",
             font=ctk.CTkFont(size=11),
-            text_color="#555555"
+            text_color=FAINT
         ).pack(pady=(14, 0))
 
         ctk.CTkLabel(
             inner,
             text="Developed by Adrian Newington  |  Optimized Build",
             font=ctk.CTkFont(size=11),
-            text_color="#555555"
+            text_color=FAINT
         ).pack(pady=(4, 0))
 
         ctk.CTkLabel(
             inner,
             text="JELLY-JAZZ SOFTWARE",
             font=ctk.CTkFont(size=11, weight="bold"),
-            text_color="#555555"
+            text_color=FAINT
         ).pack(pady=(2, 0))
 
         lbl_github = ctk.CTkLabel(
             inner,
             text="github.com/SunflowerGUY",
             font=ctk.CTkFont(size=11, underline=True),
-            text_color="#5dade2",
+            text_color=LINK,
             cursor="hand2"
         )
         lbl_github.pack(pady=(2, 0))
@@ -1264,13 +1472,13 @@ class FFmpegToolkit(ctk.CTk):
         powered.pack(pady=(20, 0))
         # Plain U+2665 heart: Tk can't draw the colour emoji version.
         ctk.CTkLabel(
-            powered, text="♥", font=ctk.CTkFont(size=14), text_color="#c0392b"
+            powered, text="♥", font=ctk.CTkFont(size=14), text_color=RED
         ).pack(side="left", padx=(0, 6))
         ctk.CTkLabel(
             powered,
             text="Powered by FFmpeg",
             font=ctk.CTkFont(size=13, weight="bold"),
-            text_color="#aaaaaa"
+            text_color=MUTED
         ).pack(side="left")
 
         ctk.CTkLabel(
@@ -1279,7 +1487,7 @@ class FFmpegToolkit(ctk.CTk):
                  "developers and community, whose generous open-source efforts have opened\n"
                  "doors for developers everywhere to build tools like this one. Thank you.",
             font=ctk.CTkFont(size=11),
-            text_color="#777777",
+            text_color=MUTED,
             justify="center"
         ).pack(pady=(4, 0))
 
@@ -1287,7 +1495,7 @@ class FFmpegToolkit(ctk.CTk):
             inner,
             text="ffmpeg.org",
             font=ctk.CTkFont(size=11, underline=True),
-            text_color="#5dade2",
+            text_color=LINK,
             cursor="hand2"
         )
         lbl_link.pack(pady=(2, 0))
@@ -1297,7 +1505,7 @@ class FFmpegToolkit(ctk.CTk):
             inner,
             text="FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.",
             font=ctk.CTkFont(size=9),
-            text_color="#4a4a4a"
+            text_color=FAINT
         ).pack(pady=(2, 0))
 
         ctk.CTkCheckBox(
@@ -1305,7 +1513,7 @@ class FFmpegToolkit(ctk.CTk):
             text="Show this screen at startup",
             variable=self._show_splash_var,
             font=ctk.CTkFont(size=11),
-            text_color="#888888",
+            text_color=MUTED,
             checkbox_width=16, checkbox_height=16,
         ).pack(pady=(18, 0))
 
@@ -1317,7 +1525,7 @@ class FFmpegToolkit(ctk.CTk):
             text="" if self._info_icon_image else "ℹ️",
             image=self._info_icon_image,
             width=26, height=26, corner_radius=13,
-            fg_color="transparent", hover_color="#2e2e2e",
+            fg_color="transparent", hover_color=HOVER, border_width=0,
             font=ctk.CTkFont(size=15),
             command=lambda: self._show_info_dialog(title, body_text),
         )
@@ -1573,8 +1781,9 @@ class FFmpegToolkit(ctk.CTk):
         output_filetypes = output_filetypes or file_filters
         opts = {"_input_change_callbacks": []}
 
-        input_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        input_frame.pack(fill="x", pady=(10, 5))
+        _files_card, files_body = dashboard_card(parent, "Files")
+        input_frame = ctk.CTkFrame(files_body, fg_color="transparent")
+        input_frame.pack(fill="x", pady=(0, 5))
 
         ctk.CTkLabel(input_frame, text="Input File:", width=label_width, anchor="w").pack(
             side="left", padx=(0, 5)
@@ -1582,8 +1791,8 @@ class FFmpegToolkit(ctk.CTk):
         input_entry = ctk.CTkEntry(input_frame, placeholder_text="Select input file...")
         input_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        output_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        output_frame.pack(fill="x", pady=5)
+        output_frame = ctk.CTkFrame(files_body, fg_color="transparent")
+        output_frame.pack(fill="x")
 
         ctk.CTkLabel(output_frame, text="Output File:", width=label_width, anchor="w").pack(
             side="left", padx=(0, 5)
@@ -1591,13 +1800,31 @@ class FFmpegToolkit(ctk.CTk):
         output_entry = ctk.CTkEntry(output_frame, placeholder_text="Auto-generated or browse...")
         output_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        def update_output(*_args):
+        # Remembers the last auto-generated name, so a name the user has typed
+        # or browsed to survives the Input box losing focus and pressing Run
+        # (where only its extension may change). Choosing a new input file, or
+        # changing an option such as the LUFS target, re-asserts the generated
+        # name so its tag matches the new settings.
+        auto_state = {"input": None, "name": None}
+
+        def update_output(*_args, keep_custom=True):
             input_path = input_entry.get().strip()
             if not input_path:
                 return
             new_path = output_namer(input_path, opts)
-            output_entry.delete(0, "end")
-            output_entry.insert(0, new_path)
+            current = output_entry.get().strip()
+            user_edited = bool(current) and current != auto_state["name"]
+            if not keep_custom or input_path != auto_state["input"] or not user_edited:
+                output_entry.delete(0, "end")
+                output_entry.insert(0, new_path)
+            else:
+                current_base, current_ext = os.path.splitext(current)
+                new_ext = os.path.splitext(new_path)[1]
+                if current_ext.lower() != new_ext.lower():
+                    output_entry.delete(0, "end")
+                    output_entry.insert(0, current_base + new_ext)
+            auto_state["input"] = input_path
+            auto_state["name"] = new_path
             for callback in opts["_input_change_callbacks"]:
                 callback(input_path)
 
@@ -1629,11 +1856,14 @@ class FFmpegToolkit(ctk.CTk):
         input_entry.bind("<FocusOut>", update_output)
         opts["input_entry"] = input_entry
         opts["output_entry"] = output_entry
+        opts["_update_output"] = update_output
 
         if options_builder:
-            options_frame = ctk.CTkFrame(parent, fg_color="transparent")
-            options_frame.pack(fill="x", pady=5)
-            options_builder(options_frame, opts, update_output)
+            _options_card, options_frame = dashboard_card(parent, "Options")
+            def option_changed(*_args):
+                update_output(keep_custom=False)
+
+            options_builder(options_frame, opts, option_changed)
 
         if button_container is not None:
             action_frame = button_container() if callable(button_container) else button_container
@@ -1641,14 +1871,10 @@ class FFmpegToolkit(ctk.CTk):
             action_frame = ctk.CTkFrame(parent, fg_color="transparent")
             action_frame.pack(anchor="center", pady=(10, 5))
 
-        run_btn = ctk.CTkButton(
-            action_frame, text=run_label, width=150, height=36,
-            font=ctk.CTkFont(size=14, weight="bold")
-        )
+        run_btn = AccentButton(action_frame, text=run_label, width=150)
 
-        abort_btn = ctk.CTkButton(
-            action_frame, text="Abort", width=110, height=36,
-            fg_color="#8b2d2d", hover_color="#b33a3a", state="disabled",
+        abort_btn = AccentButton(
+            action_frame, text="Abort", width=110, kind="danger", state="disabled",
             command=self._abort_current_operation
         )
 
@@ -1661,22 +1887,19 @@ class FFmpegToolkit(ctk.CTk):
                 abort_btn.pack(side="left")
             primary_btn = run_btn
         else:
-            save_btn = ctk.CTkButton(
-                action_frame, text=save_label, width=150, height=36,
-                font=ctk.CTkFont(size=14, weight="bold")
-            )
+            save_btn = AccentButton(action_frame, text=save_label, width=150)
             if vertical_buttons:
                 save_btn.pack(side="top", fill="x")
             else:
                 save_btn.pack(side="left")
             primary_btn = save_btn
 
-        progress = ctk.CTkProgressBar(parent, mode="indeterminate")
-        progress.pack(fill="x", pady=(0, 5))
+        progress = ActivityBar(parent, mode="indeterminate", height=6)
+        progress.pack(fill="x", padx=4, pady=(2, 8))
         progress.set(0)
 
         log_box = ctk.CTkTextbox(parent, font=ctk.CTkFont(family="Consolas", size=12))
-        log_box.pack(fill="both", expand=True, pady=(5, 0))
+        log_box.pack(fill="both", expand=True)
         log_box.configure(state="disabled")
         self._add_log_context_menu(log_box)
         self._log_with_info_icon(log_box, help_text)
@@ -1704,6 +1927,7 @@ class FFmpegToolkit(ctk.CTk):
             if confirm and not confirm(input_path, opts):
                 self._log(log_box, "Cancelled.\n")
                 return
+            output_path = output_entry.get().strip() or output_path
 
             if not self._ffmpeg_path or not os.path.isfile(self._ffmpeg_path):
                 self._log(log_box, "Error: ffmpeg not found. Set its location in Settings.\n")
@@ -1845,25 +2069,25 @@ class FFmpegToolkit(ctk.CTk):
         style.theme_use("clam")
         style.configure(
             "FFTExplorer.Treeview",
-            background="#111827", fieldbackground="#111827", foreground="#e2e8f0",
-            bordercolor="#111827", borderwidth=0, rowheight=24, font=("Segoe UI", 10),
+            background=INSET, fieldbackground=INSET, foreground=TEXT,
+            bordercolor=INSET, borderwidth=0, rowheight=24, font=("Segoe UI", 10),
         )
         style.map(
             "FFTExplorer.Treeview",
-            background=[("selected", "#2563eb")], foreground=[("selected", "#ffffff")],
+            background=[("selected", SELECTED)], foreground=[("selected", "#ffffff")],
         )
         style.configure(
             "FFTExplorer.Treeview.Heading",
-            background="#1f2937", foreground="#e2e8f0",
+            background=CARD_2, foreground=MUTED,
             font=("Segoe UI", 10, "bold"), relief="flat",
         )
-        style.map("FFTExplorer.Treeview.Heading", background=[("active", "#1f2937")])
+        style.map("FFTExplorer.Treeview.Heading", background=[("active", CARD_2)])
 
         dialog = ctk.CTkToplevel(self)
         dialog.title(title)
         dialog.withdraw()
         dialog.transient(self)
-        dialog.configure(fg_color="#0b1220")
+        dialog.configure(fg_color=BG)
 
         top = ctk.CTkFrame(dialog, fg_color="transparent")
         top.pack(fill="x", padx=10, pady=(10, 5))
@@ -1871,7 +2095,8 @@ class FFmpegToolkit(ctk.CTk):
         path_entry = ctk.CTkEntry(top, textvariable=path_var)
         path_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        tree_frame = tk.Frame(dialog, bg="#111827")
+        tree_frame = tk.Frame(dialog, bg=INSET, highlightthickness=1,
+                              highlightbackground=BORDER, highlightcolor=BORDER)
         tree_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
         tree = ttk.Treeview(
@@ -2004,7 +2229,7 @@ class FFmpegToolkit(ctk.CTk):
             dialog.destroy()
 
         ctk.CTkButton(
-            btn_row, text="Cancel", width=100, fg_color="#555555", command=dialog.destroy
+            btn_row, text="Cancel", width=100, command=dialog.destroy
         ).pack(side="right")
         ctk.CTkButton(
             btn_row, text="Select This Folder", width=160,
@@ -2577,7 +2802,7 @@ class FFmpegToolkit(ctk.CTk):
             # Row 3: source -> output preview
             opts["size_label"] = ctk.CTkLabel(
                 frame, text="Output size: select a file.", anchor="w",
-                text_color=("gray40", "gray60"),
+                text_color=MUTED,
             )
             opts["size_label"].pack(fill="x", padx=(85, 0), pady=(6, 0))
 
@@ -2589,21 +2814,21 @@ class FFmpegToolkit(ctk.CTk):
                 if src is None:
                     opts["size_label"].configure(
                         text="Output size: unknown (couldn't read the video's resolution).",
-                        text_color=("gray40", "gray60"))
+                        text_color=MUTED)
                     return
                 out = self._scaler_output_size(src, opts)
                 text = f"Source: {src[0]}×{src[1]}   →   Output: "
                 if out is None:
                     opts["size_label"].configure(text=text + "check the custom size.",
-                                                 text_color="#e8a020")
+                                                 text_color=AMBER)
                 elif out[0] * out[1] > src[0] * src[1]:
                     opts["size_label"].configure(
                         text=text + f"{out[0]}×{out[1]}   ⚠ larger than the source "
                                     "— upscaling makes a bigger file but adds no detail",
-                        text_color="#e8a020")
+                        text_color=AMBER)
                 else:
                     opts["size_label"].configure(text=text + f"{out[0]}×{out[1]}",
-                                                 text_color=("gray40", "gray60"))
+                                                 text_color=MUTED)
 
             def on_input(input_path):
                 opts["_current_input"] = input_path
@@ -2611,7 +2836,7 @@ class FFmpegToolkit(ctk.CTk):
                     show_sizes()
                     return
                 opts["size_label"].configure(text="Output size: reading file...",
-                                             text_color=("gray40", "gray60"))
+                                             text_color=MUTED)
 
                 def worker():
                     probe = self._probe_full(input_path) or {}
@@ -2620,13 +2845,13 @@ class FFmpegToolkit(ctk.CTk):
                         probe_cache[input_path] = probe
                         if opts.get("_current_input") == input_path:
                             show_sizes()
-                    self.after(0, done)
+                    self._run_on_main(done)
                 threading.Thread(target=worker, daemon=True).start()
 
             def on_setting_change(*_args):
                 is_custom = self._SCALER_PRESETS[opts["preset"].get()][0] == "custom"
                 state = "normal" if is_custom else "disabled"
-                entry_text = ("gray10", "#DCE4EE") if is_custom else "gray45"
+                entry_text = TEXT if is_custom else DISABLED
                 w_entry.configure(state=state, text_color=entry_text)
                 h_entry.configure(state=state, text_color=entry_text)
                 fit_menu.configure(state=state)
@@ -2987,7 +3212,7 @@ class FFmpegToolkit(ctk.CTk):
             opts["_probe_cache"] = probe_cache
             opts["estimate_label"] = ctk.CTkLabel(
                 frame, text="Estimated output size: select a file.", anchor="w",
-                text_color=("gray40", "gray60"),
+                text_color=MUTED,
             )
             opts["estimate_label"].pack(fill="x", padx=(85, 0), pady=(4, 0))
 
@@ -3021,7 +3246,7 @@ class FFmpegToolkit(ctk.CTk):
                         probe_cache[input_path] = probe
                         if opts.get("_current_input") == input_path:
                             show_estimate(input_path)
-                    self.after(0, done)
+                    self._run_on_main(done)
                 threading.Thread(target=worker, daemon=True).start()
 
             def on_setting_change(*_args):
@@ -3091,8 +3316,9 @@ class FFmpegToolkit(ctk.CTk):
         log_box = ctk.CTkTextbox(parent, font=ctk.CTkFont(family="Consolas", size=12))
         self._add_log_context_menu(log_box)
 
-        r1 = ctk.CTkFrame(parent, fg_color="transparent")
-        r1.pack(fill="x", padx=15, pady=(12, 4))
+        _source_card, source_body = dashboard_card(parent, "Source")
+        r1 = ctk.CTkFrame(source_body, fg_color="transparent")
+        r1.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(r1, text="Source Folder:", width=110, anchor="w").pack(side="left")
         folder_ent = ctk.CTkEntry(r1, placeholder_text="Browse -- scans automatically...")
         folder_ent.pack(side="left", fill="x", expand=True, padx=(0, 5))
@@ -3107,46 +3333,49 @@ class FFmpegToolkit(ctk.CTk):
 
         ctk.CTkButton(r1, text="Browse", width=80, command=browse_folder).pack(side="left")
 
-        r2 = ctk.CTkFrame(parent, fg_color="transparent")
-        r2.pack(fill="x", padx=15, pady=4)
+        r2 = ctk.CTkFrame(source_body, fg_color="transparent")
+        r2.pack(fill="x")
         self._prores_options_row(r2, opts, label_width=110)
 
-        list_header = ctk.CTkFrame(parent, fg_color="transparent")
-        list_header.pack(fill="x", padx=15, pady=(6, 2))
-        selection_label = ctk.CTkLabel(list_header, text="No folder scanned yet.", anchor="w")
+        _files_card, files_body = dashboard_card(parent)
+        list_header = ctk.CTkFrame(files_body, fg_color="transparent")
+        list_header.pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(list_header, text="Files", font=ctk.CTkFont(size=14, weight="bold")).pack(
+            side="left", padx=(0, 12))
+        selection_label = ctk.CTkLabel(list_header, text="No folder scanned yet.", anchor="w",
+                                       text_color=MUTED)
         selection_label.pack(side="left")
         select_none_btn = ctk.CTkButton(list_header, text="Select None", width=90, state="disabled")
         select_none_btn.pack(side="right", padx=(6, 0))
         select_all_btn = ctk.CTkButton(list_header, text="Select All", width=90, state="disabled")
         select_all_btn.pack(side="right")
 
-        file_list = ctk.CTkScrollableFrame(parent, height=150, fg_color=("gray90", "gray14"))
-        file_list.pack(fill="x", padx=15, pady=(0, 4))
+        file_list = ctk.CTkScrollableFrame(files_body, height=150, fg_color=INSET,
+                                           border_width=1, border_color=BORDER, corner_radius=10)
+        file_list.pack(fill="x", pady=(0, 4))
 
-        total_label = ctk.CTkLabel(parent, text="", anchor="w", text_color=("gray40", "gray60"))
-        total_label.pack(fill="x", padx=15)
+        batch_row = ctk.CTkFrame(files_body, fg_color="transparent")
+        batch_row.pack(fill="x", pady=(4, 0))
+        total_label = ctk.CTkLabel(batch_row, text="", anchor="w", text_color=MUTED)
+        total_label.pack(side="left")
 
-        batch_actions = ctk.CTkFrame(parent, fg_color="transparent")
-        batch_actions.pack(anchor="center", pady=(8, 4))
-        run_btn = ctk.CTkButton(batch_actions, text="  Convert Selected",
-                                width=150, height=36,
-                                font=ctk.CTkFont(size=14, weight="bold"),
-                                state="disabled")
+        batch_actions = ctk.CTkFrame(batch_row, fg_color="transparent")
+        batch_actions.pack(side="right")
+        run_btn = AccentButton(batch_actions, text="Convert Selected", width=150, state="disabled")
         run_btn.pack(side="left", padx=(0, 6))
-        abort_btn = ctk.CTkButton(
-            batch_actions, text="Abort", width=110, height=36,
-            fg_color="#8b2d2d", hover_color="#b33a3a", state="disabled",
+        abort_btn = AccentButton(
+            batch_actions, text="Abort", width=110, kind="danger", state="disabled",
             command=self._abort_current_operation
         )
         abort_btn.pack(side="left")
 
-        status_label = ctk.CTkLabel(parent, text="", anchor="w")
-        status_label.pack(fill="x", padx=15)
-        progress = ctk.CTkProgressBar(parent, mode="determinate")
-        progress.pack(fill="x", padx=15, pady=(0, 6))
+        status_label = ctk.CTkLabel(parent, text="", anchor="w", text_color=MUTED)
+        status_label.pack(fill="x", padx=4)
+        progress = ctk.CTkProgressBar(parent, mode="determinate", height=6)
+        progress.pack(fill="x", padx=4, pady=(2, 8))
         progress.set(0)
 
-        log_box.pack(fill="both", expand=True, padx=15, pady=(0, 12))
+        log_box.pack(fill="both", expand=True)
         log_box.configure(state="disabled")
         self._log_with_info_icon(log_box, (
             "ℹ️  Batch ProRes Export\n"
@@ -3277,7 +3506,7 @@ class FFmpegToolkit(ctk.CTk):
                         if scan_state["generation"] == generation and path in file_checks:
                             file_checks[path].configure(text=file_caption(path))
                             update_selection_count()
-                    self.after(0, done)
+                    self._run_on_main(done)
             if pending:
                 threading.Thread(target=worker, daemon=True).start()
 
@@ -3286,7 +3515,7 @@ class FFmpegToolkit(ctk.CTk):
                 status_label.configure(text=text)
                 if fraction is not None:
                     progress.set(max(0.0, min(1.0, fraction)))
-            self.after(0, apply)
+            self._run_on_main(apply)
 
         def convert_selected():
             selected = [f for f in files if file_vars.get(f) and file_vars[f].get()]
@@ -3463,7 +3692,8 @@ class FFmpegToolkit(ctk.CTk):
             left_col.pack(side="left", fill="y", padx=(0, 10))
             left_col.pack_propagate(False)
 
-            preview_frame = ctk.CTkFrame(main_row, fg_color=("gray85", "gray17"), width=400)
+            preview_frame = ctk.CTkFrame(main_row, fg_color=INSET, border_width=1,
+                                         border_color=BORDER, width=400)
             preview_frame.pack(side="left", fill="both", expand=True)
             # Without this, preview_frame's own footprint follows whichever
             # child currently has the larger natural size -- the static
@@ -3521,7 +3751,8 @@ class FFmpegToolkit(ctk.CTk):
             # mute, pop-out) -- styled like a normal media-player transport
             # bar and docked directly under the preview/video area. ----
             control_bar = ctk.CTkFrame(
-                preview_frame, corner_radius=18, fg_color="#161616", height=48
+                preview_frame, corner_radius=18, fg_color=CARD_2, border_width=1,
+                border_color=BORDER, height=48
             )
             # Packed from the bottom *before* preview_area in pack order, so
             # Tk allocates the bar its full 48px first and any shortfall is
@@ -3534,34 +3765,34 @@ class FFmpegToolkit(ctk.CTk):
 
             play_pause_btn = ctk.CTkButton(
                 control_bar, text="\u25b6", width=34, height=34, corner_radius=17,
-                fg_color="transparent", hover_color="#2e2e2e", font=icon_font,
+                fg_color="transparent", hover_color=HOVER, border_width=0, font=icon_font,
                 command=lambda: play_or_pause(),
             )
             play_pause_btn.pack(side="left", padx=(8, 2), pady=7)
 
             stop_ctrl_btn = ctk.CTkButton(
                 control_bar, text="\u23f9", width=30, height=30, corner_radius=15,
-                fg_color="transparent", hover_color="#2e2e2e", font=small_icon_font,
+                fg_color="transparent", hover_color=HOVER, border_width=0, font=small_icon_font,
                 state="disabled", command=lambda: stop_playback(),
             )
             stop_ctrl_btn.pack(side="left", padx=2, pady=7)
 
             expand_btn = ctk.CTkButton(
                 control_bar, text="\u2922", width=28, height=28, corner_radius=14,
-                fg_color="transparent", hover_color="#2e2e2e", font=small_icon_font,
+                fg_color="transparent", hover_color=HOVER, border_width=0, font=small_icon_font,
                 state="disabled", command=lambda: pop_out(),
             )
             expand_btn.pack(side="right", padx=(2, 8), pady=7)
 
             volume_btn = ctk.CTkButton(
                 control_bar, text="\U0001f50a", width=28, height=28, corner_radius=14,
-                fg_color="transparent", hover_color="#2e2e2e", font=small_icon_font,
+                fg_color="transparent", hover_color=HOVER, border_width=0, font=small_icon_font,
                 state="disabled", command=lambda: toggle_mute(),
             )
             volume_btn.pack(side="right", padx=2, pady=7)
 
             time_label = ctk.CTkLabel(
-                control_bar, text="0:00/0:00", text_color="#cfcfcf",
+                control_bar, text="0:00/0:00", text_color=MUTED,
                 width=84, anchor="e", font=ctk.CTkFont(size=12),
             )
             time_label.pack(side="right", padx=(4, 4), pady=7)
@@ -3572,8 +3803,8 @@ class FFmpegToolkit(ctk.CTk):
 
             progress_slider = ctk.CTkSlider(
                 control_bar, from_=0, to=1, number_of_steps=1000, height=12,
-                progress_color="#e53935", button_color="#f2f2f2",
-                button_hover_color="#ffffff", fg_color="#4a4a4a",
+                progress_color=BLUE, button_color=TEXT,
+                button_hover_color="#ffffff", fg_color=BORDER,
                 command=on_slider_move,
             )
             progress_slider.set(0)
@@ -3650,9 +3881,10 @@ class FFmpegToolkit(ctk.CTk):
             # input has been probed. Expanding also pushes the Trim & SAVE /
             # Abort buttons (added below via button_container) to the bottom.
             streams_frame = ctk.CTkScrollableFrame(
-                left_col, fg_color=("gray85", "gray17"), label_text="Preserve in Output File"
+                left_col, fg_color=INSET, border_width=1, border_color=BORDER,
+                label_fg_color=CARD_2, label_text="Preserve in Output File", height=120
             )
-            streams_frame.pack(fill="both", expand=True, pady=(0, 6))
+            # Packed further down, after action_frame: see there.
             opts["_audio_track_vars"] = []
             opts["_audio_defaults"] = []
             opts["_subtitle_track_vars"] = []
@@ -3727,9 +3959,14 @@ class FFmpegToolkit(ctk.CTk):
 
             show_streams_message("Select a video to list its audio and subtitle tracks.")
 
+            # The buttons are packed first (from the bottom) so they always get
+            # their full height; the track list then takes whatever is left and
+            # scrolls. Packed the other way round, the list squeezed the
+            # Trim & SAVE / Abort buttons out of sight.
             action_frame = ctk.CTkFrame(left_col, fg_color="transparent")
-            action_frame.pack(fill="x", pady=(0, 5))
+            action_frame.pack(side="bottom", fill="x")
             state["action_frame"] = action_frame
+            streams_frame.pack(side="top", fill="both", expand=True, pady=(0, 6))
 
             def show_important_info():
                 title = "Clip & Track Editor - Important Information"
@@ -3786,8 +4023,9 @@ class FFmpegToolkit(ctk.CTk):
                 )
 
             important_btn = ctk.CTkButton(
-                action_frame, text="Important Information",
-                fg_color="#b26a00", hover_color="#8a5200",
+                action_frame, text="\u26A0  Important Information",
+                fg_color=WARN_FILL, hover_color=WARN_HOVER, border_color="#6b5a2e",
+                text_color=AMBER, font=ctk.CTkFont(size=12, weight="bold"),
                 command=show_important_info,
             )
             important_btn.pack(fill="x", pady=(0, 8))
@@ -3816,7 +4054,7 @@ class FFmpegToolkit(ctk.CTk):
                         update_time_label(0)
                         expand_btn.configure(state="disabled")
                         volume_btn.configure(state="disabled")
-                self.after(0, finished)
+                self._run_on_main(finished)
 
             def try_embed(window_title, attempts=25):
                 def worker():
@@ -3868,7 +4106,7 @@ class FFmpegToolkit(ctk.CTk):
                         expand_btn.configure(state="normal")
                         volume_btn.configure(state="normal")
 
-                    self.after(0, apply)
+                    self._run_on_main(apply)
 
                 threading.Thread(target=worker, daemon=True).start()
 
@@ -3930,9 +4168,9 @@ class FFmpegToolkit(ctk.CTk):
                         return
                     self._trim_play_process = process
                     self._trim_play_window_title = window_title
-                    self.after(0, lambda: update_play_button_state(True, False))
+                    self._run_on_main(lambda: update_play_button_state(True, False))
                     try_embed(window_title)
-                    self.after(0, start_ticker)
+                    self._run_on_main(start_ticker)
                     monitor_playback(process)
 
                 threading.Thread(target=worker, daemon=True).start()
@@ -4008,7 +4246,7 @@ class FFmpegToolkit(ctk.CTk):
 
             hint_frame = ctk.CTkFrame(values_row, fg_color="transparent")
             hint_frame.grid(row=0, column=1, padx=10)
-            arrow_color = ("#b26a00", "#e8961e")
+            arrow_color = AMBER
             ctk.CTkLabel(
                 hint_frame, text="◀", text_color=arrow_color,
                 font=ctk.CTkFont(size=16),
@@ -4017,7 +4255,7 @@ class FFmpegToolkit(ctk.CTk):
                 hint_frame,
                 text="use the Range Finder to define the START & END points "
                      "of the saved OUTPUT FILE",
-                text_color=("#1f5f99", "#8cc4f0"),
+                text_color=LINK,
                 font=ctk.CTkFont(size=14, weight="bold"),
             ).pack(side="left")
             ctk.CTkLabel(
@@ -4129,7 +4367,7 @@ class FFmpegToolkit(ctk.CTk):
                         ok = result.returncode == 0 and os.path.isfile(state["preview_path"])
                     except Exception:
                         ok = False
-                    self.after(0, lambda: apply_preview(ok, request_id, seconds))
+                    self._run_on_main(lambda: apply_preview(ok, request_id, seconds))
 
                 threading.Thread(target=worker, daemon=True).start()
 
@@ -4185,7 +4423,7 @@ class FFmpegToolkit(ctk.CTk):
 
                 def probe_duration():
                     duration = self._get_media_duration_seconds(input_path)
-                    self.after(0, lambda: on_duration_ready(duration, input_path))
+                    self._run_on_main(lambda: on_duration_ready(duration, input_path))
 
                 def probe_streams():
                     data = self._probe_full(input_path) or {}
@@ -4349,7 +4587,7 @@ class FFmpegToolkit(ctk.CTk):
 
             opts["duration_label"] = ctk.CTkLabel(
                 duration_row, text="Select a video above to enable the scrubber.",
-                anchor="w", text_color="#f1c40f",
+                anchor="w", text_color=AMBER,
             )
             opts["duration_label"].pack(side="left", fill="x", expand=True)
 
@@ -4367,7 +4605,7 @@ class FFmpegToolkit(ctk.CTk):
             opts["slider_label"] = ctk.CTkLabel(slider_row, text="--:--:--.--", width=90, anchor="e")
             opts["slider_label"].pack(side="left")
 
-            preview_frame = ctk.CTkFrame(frame, fg_color=("gray85", "gray17"))
+            preview_frame = ctk.CTkFrame(frame, fg_color=INSET, border_width=1, border_color=BORDER)
             preview_frame.pack(fill="x", pady=(0, 5))
             opts["preview_image_label"] = ctk.CTkLabel(
                 preview_frame,
@@ -4380,12 +4618,12 @@ class FFmpegToolkit(ctk.CTk):
             status_row.pack(fill="x")
 
             opts["preview_status_label"] = ctk.CTkLabel(
-                status_row, text="", anchor="w", text_color=("gray40", "gray60")
+                status_row, text="", anchor="w", text_color=MUTED
             )
             opts["preview_status_label"].pack(side="left")
 
             opts["preview_status_label2"] = ctk.CTkLabel(
-                status_row, text="", anchor="w", text_color=("gray40", "gray60")
+                status_row, text="", anchor="w", text_color=MUTED
             )
             opts["preview_status_label2"].pack(side="left")
 
@@ -4459,18 +4697,18 @@ class FFmpegToolkit(ctk.CTk):
             if not self._ffmpeg_path or not os.path.isfile(self._ffmpeg_path):
                 opts["preview_status_label"].configure(
                     text="ffmpeg not found -- set its location in Settings.",
-                    text_color=("gray40", "gray60"),
+                    text_color=MUTED,
                 )
-                opts["preview_status_label2"].configure(text="", text_color=("gray40", "gray60"))
+                opts["preview_status_label2"].configure(text="", text_color=MUTED)
                 return
 
             state["request_id"] += 1
             my_request_id = state["request_id"]
             opts["preview_status_label"].configure(
                 text=f"Extracting frame at {self._format_seconds_as_timecode(seconds)} ...",
-                text_color=("gray40", "gray60"),
+                text_color=MUTED,
             )
-            opts["preview_status_label2"].configure(text="", text_color=("gray40", "gray60"))
+            opts["preview_status_label2"].configure(text="", text_color=MUTED)
 
             def worker():
                 timecode_str = self._format_seconds_as_timecode(seconds)
@@ -4494,7 +4732,7 @@ class FFmpegToolkit(ctk.CTk):
                     ok = result.returncode == 0 and os.path.isfile(preview_path)
                 except Exception:
                     ok = False
-                self.after(0, lambda: apply_preview_result(ok, my_request_id, seconds, opts, state))
+                self._run_on_main(lambda: apply_preview_result(ok, my_request_id, seconds, opts, state))
 
             threading.Thread(target=worker, daemon=True).start()
 
@@ -4504,16 +4742,16 @@ class FFmpegToolkit(ctk.CTk):
             if not ok:
                 opts["preview_status_label"].configure(
                     text=f"Couldn't extract a frame at {self._format_seconds_as_timecode(seconds)}.",
-                    text_color=("gray40", "gray60"),
+                    text_color=MUTED,
                 )
-                opts["preview_status_label2"].configure(text="", text_color=("gray40", "gray60"))
+                opts["preview_status_label2"].configure(text="", text_color=MUTED)
                 return
             try:
                 img = PilImage.open(state["preview_path"])
                 img.load()
             except Exception:
-                opts["preview_status_label"].configure(text="Preview extracted but couldn't be loaded.", text_color=("gray40", "gray60"))
-                opts["preview_status_label2"].configure(text="", text_color=("gray40", "gray60"))
+                opts["preview_status_label"].configure(text="Preview extracted but couldn't be loaded.", text_color=MUTED)
+                opts["preview_status_label2"].configure(text="", text_color=MUTED)
                 return
 
             max_w, max_h = 480, 270
@@ -4525,11 +4763,11 @@ class FFmpegToolkit(ctk.CTk):
             opts["_preview_ctk_image"] = preview_image
             opts["preview_status_label"].configure(
                 text=f"Previewing frame at {self._format_seconds_as_timecode(seconds)}.",
-                text_color="#f1c40f",
+                text_color=AMBER,
             )
             opts["preview_status_label2"].configure(
                 text=" Adjust slider, then click SAVE.",
-                text_color="#87CEFA",
+                text_color=LINK,
             )
 
         def refresh_duration(input_path, opts, state):
@@ -4541,13 +4779,13 @@ class FFmpegToolkit(ctk.CTk):
             state["current_input"] = input_path
             opts["duration_label"].configure(
                 text="Reading video metadata...",
-                text_color="#f1c40f"
+                text_color=AMBER
             )
 
             # Asynchronous background duration resolution to keep UI completely responsive
             def async_probe():
                 duration = self._get_media_duration_seconds(input_path)
-                self.after(0, lambda: on_duration_ready(duration, input_path, opts, state))
+                self._run_on_main(lambda: on_duration_ready(duration, input_path, opts, state))
 
             threading.Thread(target=async_probe, daemon=True).start()
 
@@ -4559,19 +4797,19 @@ class FFmpegToolkit(ctk.CTk):
             if duration is None:
                 opts["duration_label"].configure(
                     text="Could not determine video length -- scrubber disabled, enter timecode manually.",
-                    text_color="#f1c40f",
+                    text_color=AMBER,
                 )
                 opts["slider"].configure(state="disabled")
                 opts["preview_image_label"].configure(
                     image=None, text="No preview available -- enter a timecode and click Run."
                 )
-                opts["preview_status_label"].configure(text="", text_color=("gray40", "gray60"))
-                opts["preview_status_label2"].configure(text="", text_color=("gray40", "gray60"))
+                opts["preview_status_label"].configure(text="", text_color=MUTED)
+                opts["preview_status_label2"].configure(text="", text_color=MUTED)
                 return
 
             opts["duration_label"].configure(
                 text=f"Video length: {self._format_seconds_as_timecode(duration)}  -- drag slider to preview.",
-                text_color="#f1c40f",
+                text_color=AMBER,
             )
             steps = max(100, min(2000, int(duration)))
             slider_max = max(duration - 0.05, 0.05)
@@ -4580,8 +4818,8 @@ class FFmpegToolkit(ctk.CTk):
             opts["slider"].configure(state="normal", from_=0, to=slider_max, number_of_steps=steps)
 
             opts["preview_image_label"].configure(image=None, text="Loading first-frame preview...")
-            opts["preview_status_label"].configure(text="", text_color=("gray40", "gray60"))
-            opts["preview_status_label2"].configure(text="", text_color=("gray40", "gray60"))
+            opts["preview_status_label"].configure(text="", text_color=MUTED)
+            opts["preview_status_label2"].configure(text="", text_color=MUTED)
             opts["slider"].set(0)
             opts["slider_label"].configure(text="00:00:00.00")
             opts["timecode"].delete(0, "end")
@@ -5060,8 +5298,9 @@ class FFmpegToolkit(ctk.CTk):
             subs_frame = ctk.CTkFrame(frame, fg_color="transparent")
             ctk.CTkLabel(subs_frame, text="Subtitles:", width=LABEL_WIDTH, anchor="w").pack(side="left")
             ctk.CTkButton(
-                subs_frame, text="Important Subtitle Info", width=200,
-                fg_color="#b26a00", hover_color="#8a5200",
+                subs_frame, text="\u26A0  Important Subtitle Info", width=210,
+                fg_color=WARN_FILL, hover_color=WARN_HOVER, border_color="#6b5a2e",
+                text_color=AMBER, font=ctk.CTkFont(size=12, weight="bold"),
                 command=lambda: show_subtitle_info(),
             ).pack(side="left")
 
@@ -5144,8 +5383,10 @@ class FFmpegToolkit(ctk.CTk):
             else:
                 cmd.extend(["-c:a", "aac", "-b:a", "256k"])
 
-            subtitle_codec = "mov_text" if opts["format"].get() == "MP4 (Compatibility)" else "copy"
-            cmd.extend(["-map", "0:s?", "-c:s", subtitle_codec, out, "-y"])
+            if not opts.get("_drop_subtitles"):
+                subtitle_codec = "mov_text" if opts["format"].get() == "MP4 (Compatibility)" else "copy"
+                cmd.extend(["-map", "0:s?", "-c:s", subtitle_codec])
+            cmd.extend([out, "-y"])
             return cmd
 
         def output_namer(inp, opts):
@@ -5156,7 +5397,45 @@ class FFmpegToolkit(ctk.CTk):
             ext = CONTAINER_FORMATS[opts["format"].get()]
             return self._suffixed_output(inp, f" ({label})", ext=ext)
 
+        def unsupported_subtitles(opts):
+            """Subtitle tracks the chosen Output Format can't take (see the
+            Important Subtitle Info popup): MOV only copies mov_text, MP4
+            can't convert image subtitles to text. MKV accepts everything."""
+            fmt = opts["format"].get()
+            streams = opts.get("_subtitle_streams", [])
+            if fmt == "MOV (QuickTime)":
+                return [s for s in streams if s.get("codec_name") != "mov_text"]
+            if fmt == "MP4 (Compatibility)":
+                return [s for s in streams if s.get("codec_name") in IMAGE_SUBTITLE_CODECS]
+            return []
+
         def confirm(input_path, opts):
+            opts["_drop_subtitles"] = False
+            bad_subs = unsupported_subtitles(opts)
+            if bad_subs:
+                fmt_short = opts["format"].get().split()[0]
+                codecs = ", ".join(sorted({s.get("codec_name", "?") for s in bad_subs}))
+                title = "Subtitles Not Supported"
+                self._center_next_messagebox(title)
+                answer = messagebox.askyesnocancel(
+                    title,
+                    f"{len(bad_subs)} subtitle track{'s' if len(bad_subs) != 1 else ''} "
+                    f"in this file ({codecs}) can't be carried into {fmt_short}, "
+                    "so FFmpeg would stop with an error.\n\n"
+                    "Yes  -  switch Output Format to MKV and keep all subtitles\n"
+                    f"No  -  stay with {fmt_short} and leave the subtitles out\n"
+                    "Cancel  -  don't run",
+                    parent=self,
+                )
+                if answer is None:
+                    return False
+                if answer:
+                    opts["format"].set("MKV (Matroska)")
+                    # Keeps a typed name (just changing its extension to .mkv).
+                    opts["_update_output"]()
+                else:
+                    opts["_drop_subtitles"] = True
+
             if opts["format"].get() == "MP4 (Compatibility)" and opts["codec"].get() == "PCM (Resolve/Editing)":
                 return messagebox.askyesno(
                     "PCM in MP4",
@@ -5191,6 +5470,9 @@ class FFmpegToolkit(ctk.CTk):
                     f"  Channels: {opts['channels'].get()}",
                     f"  Output Codec: {opts['codec'].get()}",
                     f"  Output Format: {opts['format'].get()}",
+                    "  Subtitles: "
+                    + ("left out (not supported by this format)"
+                       if opts.get("_drop_subtitles") else "carried over"),
                     "",
                     "=== Output File ===",
                     self._describe_media(output_path),
@@ -5499,8 +5781,9 @@ class FFmpegToolkit(ctk.CTk):
         )
 
     def _build_inspect_tab(self, parent):
-        input_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        input_frame.pack(fill="x", pady=(10, 5))
+        _file_card, file_body = dashboard_card(parent, "File")
+        input_frame = ctk.CTkFrame(file_body, fg_color="transparent")
+        input_frame.pack(fill="x")
 
         ctk.CTkLabel(input_frame, text="Input File:", width=80, anchor="w").pack(
             side="left", padx=(0, 5)
@@ -5518,28 +5801,24 @@ class FFmpegToolkit(ctk.CTk):
             side="left"
         )
 
-        inspect_actions = ctk.CTkFrame(parent, fg_color="transparent")
-        inspect_actions.pack(anchor="center", pady=(10, 5))
+        inspect_actions = ctk.CTkFrame(file_body, fg_color="transparent")
+        inspect_actions.pack(anchor="e", pady=(10, 0))
 
-        inspect_btn = ctk.CTkButton(
-            inspect_actions, text="Inspect", width=150, height=36,
-            font=ctk.CTkFont(size=14, weight="bold")
-        )
+        inspect_btn = AccentButton(inspect_actions, text="Inspect", width=150)
         inspect_btn.pack(side="left", padx=(0, 6))
 
-        abort_btn = ctk.CTkButton(
-            inspect_actions, text="Abort", width=110, height=36,
-            fg_color="#8b2d2d", hover_color="#b33a3a", state="disabled",
+        abort_btn = AccentButton(
+            inspect_actions, text="Abort", width=110, kind="danger", state="disabled",
             command=self._abort_current_operation
         )
         abort_btn.pack(side="left")
 
-        progress = ctk.CTkProgressBar(parent, mode="indeterminate")
-        progress.pack(fill="x", pady=(0, 5))
+        progress = ActivityBar(parent, mode="indeterminate", height=6)
+        progress.pack(fill="x", padx=4, pady=(2, 8))
         progress.set(0)
 
         log_box = ctk.CTkTextbox(parent, font=ctk.CTkFont(family="Consolas", size=12))
-        log_box.pack(fill="both", expand=True, pady=(5, 0))
+        log_box.pack(fill="both", expand=True)
         log_box.configure(state="disabled")
         self._add_log_context_menu(log_box)
         self._log_with_info_icon(log_box, (
@@ -5679,8 +5958,9 @@ class FFmpegToolkit(ctk.CTk):
             ("All files", "*.*"),
         ]
 
-        input_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        input_frame.pack(fill="x", pady=(10, 5))
+        _files_card, files_body = dashboard_card(parent, "Files")
+        input_frame = ctk.CTkFrame(files_body, fg_color="transparent")
+        input_frame.pack(fill="x", pady=(0, 5))
         ctk.CTkLabel(input_frame, text="Input File:", width=80, anchor="w").pack(
             side="left", padx=(0, 5)
         )
@@ -5701,8 +5981,8 @@ class FFmpegToolkit(ctk.CTk):
             side="left"
         )
 
-        output_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        output_frame.pack(fill="x", pady=5)
+        output_frame = ctk.CTkFrame(files_body, fg_color="transparent")
+        output_frame.pack(fill="x")
         ctk.CTkLabel(output_frame, text="Output File:", width=80, anchor="w").pack(
             side="left", padx=(0, 5)
         )
@@ -5719,32 +5999,29 @@ class FFmpegToolkit(ctk.CTk):
             side="left"
         )
 
-        cmd_box = ctk.CTkTextbox(parent, height=80, font=ctk.CTkFont(family="Consolas", size=12))
-        cmd_box.pack(fill="x", pady=(10, 5))
+        _cmd_card, cmd_body = dashboard_card(parent, "Command")
+        cmd_box = ctk.CTkTextbox(cmd_body, height=80, font=ctk.CTkFont(family="Consolas", size=12))
+        cmd_box.pack(fill="x")
         cmd_box.insert("1.0", "ffmpeg.exe -i <input> -c copy -y <output>")
 
-        custom_actions = ctk.CTkFrame(parent, fg_color="transparent")
-        custom_actions.pack(anchor="center", pady=(10, 5))
+        custom_actions = ctk.CTkFrame(cmd_body, fg_color="transparent")
+        custom_actions.pack(anchor="e", pady=(10, 0))
 
-        run_btn = ctk.CTkButton(
-            custom_actions, text="Run Custom Command", width=190, height=36,
-            font=ctk.CTkFont(size=14, weight="bold")
-        )
+        run_btn = AccentButton(custom_actions, text="Run Custom Command", width=190)
         run_btn.pack(side="left", padx=(0, 6))
 
-        abort_btn = ctk.CTkButton(
-            custom_actions, text="Abort", width=110, height=36,
-            fg_color="#8b2d2d", hover_color="#b33a3a", state="disabled",
+        abort_btn = AccentButton(
+            custom_actions, text="Abort", width=110, kind="danger", state="disabled",
             command=self._abort_current_operation
         )
         abort_btn.pack(side="left")
 
-        progress = ctk.CTkProgressBar(parent, mode="indeterminate")
-        progress.pack(fill="x", pady=(0, 5))
+        progress = ActivityBar(parent, mode="indeterminate", height=6)
+        progress.pack(fill="x", padx=4, pady=(2, 8))
         progress.set(0)
 
         log_box = ctk.CTkTextbox(parent, font=ctk.CTkFont(family="Consolas", size=12))
-        log_box.pack(fill="both", expand=True, pady=(5, 0))
+        log_box.pack(fill="both", expand=True)
         log_box.configure(state="disabled")
         self._add_log_context_menu(log_box)
         self._log_with_info_icon(log_box, (
@@ -5807,11 +6084,11 @@ class FFmpegToolkit(ctk.CTk):
                 except Exception as e:
                     self._log(log_box, f"Error: {e}\n")
                 finally:
-                    self.after(0, lambda: run_btn.configure(state="normal"))
-                    self.after(0, lambda: abort_btn.configure(state="disabled"))
-                    self.after(0, lambda: progress.stop())
-                    self.after(0, lambda: progress.set(0))
-                    self.after(0, lambda: self._set_operation_running(False))
+                    self._run_on_main(lambda: run_btn.configure(state="normal"))
+                    self._run_on_main(lambda: abort_btn.configure(state="disabled"))
+                    self._run_on_main(lambda: progress.stop())
+                    self._run_on_main(lambda: progress.set(0))
+                    self._run_on_main(lambda: self._set_operation_running(False))
                     self._active_process = None
 
             threading.Thread(target=worker, daemon=True).start()
@@ -5832,15 +6109,16 @@ class FFmpegToolkit(ctk.CTk):
         log_box = ctk.CTkTextbox(parent, font=ctk.CTkFont(family="Consolas", size=12))
         self._add_log_context_menu(log_box)
 
-        r1 = ctk.CTkFrame(parent, fg_color="transparent")
-        r1.pack(fill="x", padx=15, pady=(12, 4))
+        _source_card, source_body = dashboard_card(parent, "Source")
+        r1 = ctk.CTkFrame(source_body, fg_color="transparent")
+        r1.pack(fill="x", pady=(0, 4))
         ctk.CTkLabel(r1, text="Input Format:", width=110, anchor="w").pack(side="left")
         in_fmt = ctk.StringVar(value="WAV")
         ctk.CTkOptionMenu(r1, values=FORMATS, variable=in_fmt, width=120,
                           command=lambda v: parent.after(150, scan)).pack(side="left")
 
-        r2 = ctk.CTkFrame(parent, fg_color="transparent")
-        r2.pack(fill="x", padx=15, pady=4)
+        r2 = ctk.CTkFrame(source_body, fg_color="transparent")
+        r2.pack(fill="x", pady=4)
         ctk.CTkLabel(r2, text="Source Folder:", width=110, anchor="w").pack(side="left")
         folder_ent = ctk.CTkEntry(r2, placeholder_text="Browse -- scans automatically...")
         folder_ent.pack(side="left", fill="x", expand=True, padx=(0, 5))
@@ -5857,43 +6135,44 @@ class FFmpegToolkit(ctk.CTk):
 
         ctk.CTkButton(r2, text="Browse", width=80, command=browse_folder).pack(side="left")
 
-        r3 = ctk.CTkFrame(parent, fg_color="transparent")
-        r3.pack(fill="x", padx=15, pady=4)
+        r3 = ctk.CTkFrame(source_body, fg_color="transparent")
+        r3.pack(fill="x")
         ctk.CTkLabel(r3, text="Output Format:", width=110, anchor="w").pack(side="left")
         out_fmt = ctk.StringVar(value="MP3")
         ctk.CTkOptionMenu(r3, values=FORMATS, variable=out_fmt, width=120).pack(side="left")
 
-        list_header = ctk.CTkFrame(parent, fg_color="transparent")
-        list_header.pack(fill="x", padx=15, pady=(6, 2))
-        selection_label = ctk.CTkLabel(list_header, text="No folder scanned yet.", anchor="w")
+        _files_card, files_body = dashboard_card(parent)
+        list_header = ctk.CTkFrame(files_body, fg_color="transparent")
+        list_header.pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(list_header, text="Files", font=ctk.CTkFont(size=14, weight="bold")).pack(
+            side="left", padx=(0, 12))
+        selection_label = ctk.CTkLabel(list_header, text="No folder scanned yet.", anchor="w",
+                                       text_color=MUTED)
         selection_label.pack(side="left")
         select_none_btn = ctk.CTkButton(list_header, text="Select None", width=90, state="disabled")
         select_none_btn.pack(side="right", padx=(6, 0))
         select_all_btn = ctk.CTkButton(list_header, text="Select All", width=90, state="disabled")
         select_all_btn.pack(side="right")
 
-        file_list = ctk.CTkScrollableFrame(parent, height=150, fg_color=("gray90", "gray14"))
-        file_list.pack(fill="x", padx=15, pady=(0, 4))
+        file_list = ctk.CTkScrollableFrame(files_body, height=150, fg_color=INSET,
+                                           border_width=1, border_color=BORDER, corner_radius=10)
+        file_list.pack(fill="x", pady=(0, 4))
 
-        batch_actions = ctk.CTkFrame(parent, fg_color="transparent")
-        batch_actions.pack(anchor="center", pady=(8, 4))
-        run_btn = ctk.CTkButton(batch_actions, text="  Convert Selected",
-                                width=150, height=36,
-                                font=ctk.CTkFont(size=14, weight="bold"),
-                                state="disabled")
+        batch_actions = ctk.CTkFrame(files_body, fg_color="transparent")
+        batch_actions.pack(anchor="e", pady=(4, 0))
+        run_btn = AccentButton(batch_actions, text="Convert Selected", width=150, state="disabled")
         run_btn.pack(side="left", padx=(0, 6))
-        abort_btn = ctk.CTkButton(
-            batch_actions, text="Abort", width=110, height=36,
-            fg_color="#8b2d2d", hover_color="#b33a3a", state="disabled",
+        abort_btn = AccentButton(
+            batch_actions, text="Abort", width=110, kind="danger", state="disabled",
             command=self._abort_current_operation
         )
         abort_btn.pack(side="left")
 
-        progress = ctk.CTkProgressBar(parent, mode="indeterminate")
-        progress.pack(fill="x", padx=15, pady=(0, 6))
+        progress = ActivityBar(parent, mode="indeterminate", height=6)
+        progress.pack(fill="x", padx=4, pady=(2, 8))
         progress.stop()
 
-        log_box.pack(fill="both", expand=True, padx=15, pady=(0, 12))
+        log_box.pack(fill="both", expand=True)
         log_box.configure(state="disabled")
         self._log_with_info_icon(log_box, (
             "ℹ️  Batch Audio Convert\n"
@@ -6077,8 +6356,9 @@ class FFmpegToolkit(ctk.CTk):
         run_btn.configure(command=convert_all)
 
     def _build_settings_tab(self, parent):
-        ffmpeg_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        ffmpeg_frame.pack(fill="x", pady=(15, 5))
+        _ffmpeg_card, ffmpeg_body = dashboard_card(parent, "FFmpeg")
+        ffmpeg_frame = ctk.CTkFrame(ffmpeg_body, fg_color="transparent")
+        ffmpeg_frame.pack(fill="x")
 
         ctk.CTkLabel(
             ffmpeg_frame, text="FFmpeg Location:", width=160, anchor="w"
@@ -6110,20 +6390,21 @@ class FFmpegToolkit(ctk.CTk):
 
         resolved = self._ffmpeg_path if (self._ffmpeg_path and os.path.isfile(self._ffmpeg_path)) else None
         ffmpeg_status_label = ctk.CTkLabel(
-            parent,
+            ffmpeg_body,
             text=(f"Currently using: {resolved}" if resolved
                   else "Not found -- checked app folder, then system PATH, then this setting."),
             font=ctk.CTkFont(size=11),
-            text_color="#888888" if resolved else "#e8a020",
+            text_color=MUTED if resolved else AMBER,
             anchor="w",
         )
-        ffmpeg_status_label.pack(fill="x", padx=5, pady=(0, 10))
+        ffmpeg_status_label.pack(fill="x", padx=(165, 0), pady=(4, 0))
 
         self._settings_ffmpeg_entry = ffmpeg_entry
         self._settings_ffmpeg_status_label = ffmpeg_status_label
 
-        folder_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        folder_frame.pack(fill="x", pady=(5, 5))
+        _output_card, output_body = dashboard_card(parent, "Output")
+        folder_frame = ctk.CTkFrame(output_body, fg_color="transparent")
+        folder_frame.pack(fill="x")
 
         ctk.CTkLabel(
             folder_frame, text="Default Output Folder:", width=160, anchor="w"
@@ -6147,14 +6428,15 @@ class FFmpegToolkit(ctk.CTk):
             side="left"
         )
 
+        _prefs_card, prefs_body = dashboard_card(parent, "Preferences")
         remember_var = ctk.BooleanVar(value=self._settings.get("remember_last_folder", True))
         ctk.CTkCheckBox(
-            parent, text="Remember last input folder", variable=remember_var
-        ).pack(anchor="w", pady=(10, 5), padx=5)
+            prefs_body, text="Remember last input folder", variable=remember_var
+        ).pack(anchor="w", pady=(0, 8))
 
         ctk.CTkCheckBox(
-            parent, text="Show welcome screen at startup", variable=self._show_splash_var
-        ).pack(anchor="w", pady=(5, 5), padx=5)
+            prefs_body, text="Show welcome screen at startup", variable=self._show_splash_var
+        ).pack(anchor="w")
 
         def save_settings():
             self._settings["default_output_folder"] = folder_entry.get().strip()
@@ -6168,37 +6450,41 @@ class FFmpegToolkit(ctk.CTk):
             ffmpeg_status_label.configure(
                 text=(f"Currently using: {self._ffmpeg_path}" if found
                       else "Not found -- checked app folder, then system PATH, then this setting."),
-                text_color="#888888" if found else "#e8a020",
+                text_color=MUTED if found else AMBER,
             )
             self._set_ffmpeg_status(found)
             if found:
                 self._check_ffmpeg_version_and_warn()
 
-            status_label.configure(text="Settings saved!", text_color="#2ecc71")
+            status_label.configure(text="Settings saved!", text_color=GREEN)
             self.after(3000, lambda: status_label.configure(text=""))
 
-        ctk.CTkButton(
-            parent, text="Save Settings", height=40,
-            font=ctk.CTkFont(size=14, weight="bold"),
-            command=save_settings
-        ).pack(fill="x", pady=(15, 5))
+        save_row = ctk.CTkFrame(parent, fg_color="transparent")
+        save_row.pack(fill="x", pady=(4, 0))
+        AccentButton(save_row, text="Save Settings", width=170, command=save_settings).pack(side="right")
 
-        status_label = ctk.CTkLabel(parent, text="", font=ctk.CTkFont(size=12))
-        status_label.pack(anchor="w", padx=5)
+        status_label = ctk.CTkLabel(save_row, text="", font=ctk.CTkFont(size=12))
+        status_label.pack(side="right", padx=12)
 
     def _log(self, textbox, text):
+        if threading.current_thread() is not threading.main_thread():
+            self._run_on_main(lambda: self._log(textbox, text))
+            return
         textbox.configure(state="normal")
         textbox.insert("end", text)
         textbox.see("end")
         textbox.configure(state="disabled")
 
     def _clear_log(self, textbox):
+        if threading.current_thread() is not threading.main_thread():
+            self._run_on_main(lambda: self._clear_log(textbox))
+            return
         textbox.configure(state="normal")
         textbox.delete("1.0", "end")
         textbox.configure(state="disabled")
 
     def _add_log_context_menu(self, log_box):
-        menu = Menu(self, tearoff=0)
+        menu = self._dark_menu()
         menu.add_command(
             label="Launch Log Info with NOTEPAD",
             command=lambda: self._open_log_in_notepad(log_box),
@@ -6314,20 +6600,20 @@ class FFmpegToolkit(ctk.CTk):
                 elif returncode == 0:
                     self._log(log_box, "Done!\n")
                     if on_success is not None:
-                        self.after(0, on_success)
+                        self._run_on_main(on_success)
                 elif expect_error and returncode == 1:
                     self._log(log_box, "Inspection complete.\n")
                 else:
                     self._log(log_box, f"Error \u2014 check log (exit code: {returncode})\n")
                     if self._last_run_suspected_old_ffmpeg:
-                        self.after(0, self._show_old_ffmpeg_warning)
+                        self._run_on_main(self._show_old_ffmpeg_warning)
 
-            self.after(0, lambda: btn.configure(state="normal"))
+            self._run_on_main(lambda: btn.configure(state="normal"))
             if abort_btn is not None:
-                self.after(0, lambda: abort_btn.configure(state="disabled"))
-            self.after(0, lambda: progress.stop())
-            self.after(0, lambda: progress.set(0))
-            self.after(0, lambda: self._set_operation_running(False))
+                self._run_on_main(lambda: abort_btn.configure(state="disabled"))
+            self._run_on_main(lambda: progress.stop())
+            self._run_on_main(lambda: progress.set(0))
+            self._run_on_main(lambda: self._set_operation_running(False))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -6364,16 +6650,17 @@ class FFmpegToolkit(ctk.CTk):
                     elif returncode2 is not None:
                         self._log(log_box, f"Error (exit code: {returncode2})\n")
 
-            self.after(0, lambda: btn.configure(state="normal"))
+            self._run_on_main(lambda: btn.configure(state="normal"))
             if abort_btn is not None:
-                self.after(0, lambda: abort_btn.configure(state="disabled"))
-            self.after(0, lambda: progress.stop())
-            self.after(0, lambda: progress.set(0))
-            self.after(0, lambda: self._set_operation_running(False))
+                self._run_on_main(lambda: abort_btn.configure(state="disabled"))
+            self._run_on_main(lambda: progress.stop())
+            self._run_on_main(lambda: progress.set(0))
+            self._run_on_main(lambda: self._set_operation_running(False))
 
         threading.Thread(target=worker, daemon=True).start()
 
 
 if __name__ == "__main__":
+    apply_dashboard_theme()
     app = FFmpegToolkit()
     app.mainloop()

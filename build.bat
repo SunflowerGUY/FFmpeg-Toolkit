@@ -70,6 +70,7 @@ python -m PyInstaller ^
     --windowed ^
     --name "!base_name!" ^
     --icon="app_icon.ico" ^
+    --add-data "app_icon.ico;." ^
     --collect-data customtkinter ^
     "!chosen_script!"
 
