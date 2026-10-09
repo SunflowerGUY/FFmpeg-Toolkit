@@ -19,8 +19,8 @@ from tkinter import filedialog, messagebox, Menu, ttk
 from PIL import Image as PilImage, ImageDraw, ImageTk
 
 
-APP_VERSION = "10.1-L"
-BUILD_DATE = "9 October 2026"
+APP_VERSION = "10.2-L"
+BUILD_DATE = "10 October 2026"
 
 # ---------------------------------------------------------------- dashboard look
 # Palette from JJ's Battery Health Analyser (ui_theme.py), so the apps match.
@@ -2776,55 +2776,110 @@ class FFmpegToolkit(ctk.CTk):
         probe_cache = {}
 
         def options_builder(frame, opts, on_change):
-            # Row 1: size
-            row1 = ctk.CTkFrame(frame, fg_color="transparent")
-            row1.pack(fill="x")
+            # Row 1: encoding
+            row_codec = ctk.CTkFrame(frame, fg_color="transparent")
+            row_codec.pack(fill="x")
             # Same width as the Input/Output File labels, so the menu lines up with their boxes.
-            ctk.CTkLabel(row1, text="Resolution:", width=80, anchor="w").pack(side="left", padx=(0, 5))
-            opts["preset"] = ctk.StringVar(value="1080p")
-            ctk.CTkOptionMenu(
-                row1, variable=opts["preset"], values=list(self._SCALER_PRESETS.keys()), width=130
-            ).pack(side="left", padx=(0, 15))
-
-            opts["custom_w"] = ctk.StringVar(value="1920")
-            opts["custom_h"] = ctk.StringVar(value="1080")
-            ctk.CTkLabel(row1, text="Custom:", anchor="w").pack(side="left", padx=(0, 5))
-            w_entry = ctk.CTkEntry(row1, textvariable=opts["custom_w"], width=64, placeholder_text="auto")
-            w_entry.pack(side="left")
-            ctk.CTkLabel(row1, text="×").pack(side="left", padx=4)
-            h_entry = ctk.CTkEntry(row1, textvariable=opts["custom_h"], width=64, placeholder_text="auto")
-            h_entry.pack(side="left", padx=(0, 15))
-
-            opts["fit_mode"] = ctk.StringVar(value=self._SCALER_FIT_MODES[0])
-            fit_menu = ctk.CTkOptionMenu(
-                row1, variable=opts["fit_mode"], values=self._SCALER_FIT_MODES, width=200
-            )
-            fit_menu.pack(side="left")
-
-            # Row 2: encoding
-            row2 = ctk.CTkFrame(frame, fg_color="transparent")
-            row2.pack(fill="x", pady=(8, 0))
-            ctk.CTkLabel(row2, text="Codec:", width=80, anchor="w").pack(side="left", padx=(0, 5))
+            ctk.CTkLabel(row_codec, text="Codec:", width=80, anchor="w").pack(side="left", padx=(0, 5))
             opts["codec"] = ctk.StringVar(value="H.264")
             ctk.CTkOptionMenu(
-                row2, variable=opts["codec"], values=["H.264", "H.265"], width=130
+                row_codec, variable=opts["codec"], values=["H.264", "H.265"], width=130
             ).pack(side="left", padx=(0, 15))
 
-            ctk.CTkLabel(row2, text="Quality (CRF):", anchor="w").pack(side="left", padx=(0, 5))
-            crf_label = ctk.CTkLabel(row2, text="20", width=30)
+            ctk.CTkLabel(row_codec, text="Quality (CRF):", anchor="w").pack(side="left", padx=(0, 5))
+            crf_label = ctk.CTkLabel(row_codec, text="20", width=30)
             opts["crf"] = ctk.IntVar(value=20)
 
             def on_crf_change(value):
                 opts["crf"].set(int(value))
                 crf_label.configure(text=str(int(value)))
 
-            crf_slider = ctk.CTkSlider(row2, from_=16, to=30, number_of_steps=14,
+            crf_slider = ctk.CTkSlider(row_codec, from_=16, to=30, number_of_steps=14,
                                        command=on_crf_change)
             crf_slider.set(20)
             crf_slider.pack(side="left", fill="x", expand=True, padx=(0, 5))
             crf_label.pack(side="right", padx=(5, 0))
 
-            # Row 3: source -> output preview
+            # Row 2: size
+            row_size = ctk.CTkFrame(frame, fg_color="transparent")
+            row_size.pack(fill="x", pady=(8, 0))
+            ctk.CTkLabel(row_size, text="Resolution:", width=80, anchor="w").pack(side="left", padx=(0, 5))
+            opts["preset"] = ctk.StringVar(value="1080p")
+            ctk.CTkOptionMenu(
+                row_size, variable=opts["preset"], values=list(self._SCALER_PRESETS.keys()), width=130
+            ).pack(side="left", padx=(0, 15))
+
+            opts["custom_w"] = ctk.StringVar(value="1920")
+            opts["custom_h"] = ctk.StringVar(value="1080")
+            ctk.CTkLabel(row_size, text="Custom:", anchor="w").pack(side="left", padx=(0, 5))
+            w_entry = ctk.CTkEntry(row_size, textvariable=opts["custom_w"], width=64, placeholder_text="auto")
+            w_entry.pack(side="left")
+            ctk.CTkLabel(row_size, text="×").pack(side="left", padx=4)
+            h_entry = ctk.CTkEntry(row_size, textvariable=opts["custom_h"], width=64, placeholder_text="auto")
+            h_entry.pack(side="left", padx=(0, 15))
+
+            opts["fit_mode"] = ctk.StringVar(value=self._SCALER_FIT_MODES[0])
+            fit_menu = ctk.CTkOptionMenu(
+                row_size, variable=opts["fit_mode"], values=self._SCALER_FIT_MODES, width=200
+            )
+            fit_menu.pack(side="left")
+
+            # Row 3: scale slider. The centre is ×1 (the source size); left
+            # shrinks down to ×0.3, right enlarges up to ×3. Only enabled for
+            # "Custom size"; moving it fills the boxes from the source's size.
+            row_scale = ctk.CTkFrame(frame, fg_color="transparent")
+            row_scale.pack(fill="x", pady=(8, 0))
+            ctk.CTkLabel(row_scale, text="Scale:", width=80, anchor="w").pack(side="left", padx=(0, 5))
+            scale_min_label = ctk.CTkLabel(row_scale, text="×0.3", text_color=MUTED)
+            scale_min_label.pack(side="left", padx=(0, 5))
+            scale_label = ctk.CTkLabel(row_scale, text="×1.00", width=45)
+            scale_state = {"factor": 1.0, "active": False, "applying": False}
+
+            def position_to_factor(pos):
+                # Each half of the slider has its own range (0.3–1 and 1–3),
+                # so ×1 sits in the middle. Rounded to steps of 0.05.
+                raw = 1 + 0.7 * pos if pos < 0 else 1 + 2 * pos
+                return round(round(raw / 0.05) * 0.05, 2)
+
+            def apply_scale():
+                """Fill the Custom boxes with source size × factor."""
+                if scale_state["applying"]:
+                    # Writing a box refreshes the output name, which calls
+                    # on_input and lands back here; the outer call finishes the job.
+                    return
+                probe = probe_cache.get(opts.get("_current_input"))
+                src = self._display_size(probe) if probe else None
+                if src is None:
+                    return
+                factor = scale_state["factor"]
+                scale_state["applying"] = True
+                try:
+                    opts["custom_w"].set(str(self._even(src[0] * factor)))
+                    opts["custom_h"].set(str(self._even(src[1] * factor)))
+                finally:
+                    scale_state["applying"] = False
+
+            def on_scale_change(pos):
+                factor = position_to_factor(pos)
+                scale_state["factor"] = factor
+                scale_state["active"] = True
+                scale_label.configure(text=f"×{factor:.2f}")
+                apply_scale()
+
+            def reset_scale():
+                scale_state.update(factor=1.0, active=False)
+                scale_slider.set(0)
+                scale_label.configure(text="×1.00")
+
+            scale_slider = ctk.CTkSlider(row_scale, from_=-1, to=1, number_of_steps=280,
+                                         command=on_scale_change)
+            scale_slider.set(0)
+            scale_slider.pack(side="left", fill="x", expand=True, padx=(0, 5))
+            scale_max_label = ctk.CTkLabel(row_scale, text="×3", text_color=MUTED)
+            scale_max_label.pack(side="left", padx=(5, 0))
+            scale_label.pack(side="right", padx=(5, 0))
+
+            # Row 4: source -> output preview
             opts["size_label"] = ctk.CTkLabel(
                 frame, text="Output size: select a file.", anchor="w",
                 text_color=MUTED,
@@ -2856,8 +2911,11 @@ class FFmpegToolkit(ctk.CTk):
                                                  text_color=MUTED)
 
             def on_input(input_path):
+                is_new_file = input_path != opts.get("_current_input")
                 opts["_current_input"] = input_path
                 if input_path in probe_cache:
+                    if scale_state["active"] and is_new_file:
+                        apply_scale()
                     show_sizes()
                     return
                 opts["size_label"].configure(text="Output size: reading file...",
@@ -2869,21 +2927,44 @@ class FFmpegToolkit(ctk.CTk):
                     def done():
                         probe_cache[input_path] = probe
                         if opts.get("_current_input") == input_path:
+                            # A new file keeps the chosen scale, sized to its own resolution.
+                            if scale_state["active"]:
+                                apply_scale()
                             show_sizes()
                     self._run_on_main(done)
                 threading.Thread(target=worker, daemon=True).start()
 
+            def on_box_typed(*_args):
+                # Typing a size by hand, or picking a preset, takes over from
+                # the slider, so it goes back to ×1.
+                if scale_state["active"] and not scale_state["applying"]:
+                    reset_scale()
+
             def on_setting_change(*_args):
                 is_custom = self._SCALER_PRESETS[opts["preset"].get()][0] == "custom"
+                if not is_custom and scale_state["active"]:
+                    reset_scale()
                 state = "normal" if is_custom else "disabled"
                 entry_text = TEXT if is_custom else DISABLED
                 w_entry.configure(state=state, text_color=entry_text)
                 h_entry.configure(state=state, text_color=entry_text)
                 fit_menu.configure(state=state)
+                # A disabled CTkSlider keeps its colours, so grey it out by hand.
+                scale_slider.configure(
+                    state=state,
+                    progress_color=BLUE if is_custom else BORDER,
+                    button_color=BLUE if is_custom else DISABLED,
+                    button_hover_color=BLUE_HOVER if is_custom else DISABLED,
+                )
+                scale_label.configure(text_color=TEXT if is_custom else DISABLED)
+                for end_label in (scale_min_label, scale_max_label):
+                    end_label.configure(text_color=MUTED if is_custom else DISABLED)
                 show_sizes()
                 on_change()  # refresh the suggested output name (_720p, _50pc...)
 
             opts["_input_change_callbacks"].append(on_input)
+            for key in ("custom_w", "custom_h"):
+                opts[key].trace_add("write", on_box_typed)
             for key in ("preset", "custom_w", "custom_h", "fit_mode"):
                 opts[key].trace_add("write", on_setting_change)
             on_setting_change()
@@ -2949,6 +3030,8 @@ class FFmpegToolkit(ctk.CTk):
                 "      Fit + pad — exact size, with black bars where the shape differs.\n"
                 "      Crop to fill — exact size, trimming the overflow (good for 1080×1920 social video).\n"
                 "      Stretch — exact size, distorting the picture.\n"
+                "  - Scale slider: centre is ×1 (the source size). Slide left to shrink (down to ×0.3) or right to "
+                "enlarge (up to ×3). Available with Custom size; it fills in the width and height for you.\n"
                 "  - Quality (CRF): lower = better quality and bigger file. 18–22 is a good range.\n\n"
                 "Optimisations Applied:\n"
                 "  - Lanczos scaling for the sharpest result.\n"

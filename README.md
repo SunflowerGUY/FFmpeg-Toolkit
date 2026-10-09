@@ -1,6 +1,6 @@
 # FFmpeg Toolkit 🎬🔧
 
-**Version 10.0** — 29 September 2026
+**Version 10.1** — 10 October 2026
 
 A Vibe Coded, feature-rich, dark-themed desktop GUI for [FFmpeg](https://ffmpeg.org) built with Python and CustomTkinter, for **Windows** and **Linux**.
 Designed for content creators who work with audio editors and video editors such as [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve) — fix, convert, inspect and process video files without touching the command line.
@@ -13,6 +13,12 @@ Designed for content creators who work with audio editors and video editors such
 ![Main Interface](screenshots/Screenshot-v10-0.png)
 
 ---
+
+## 🆕 What's new in 10.1
+
+- **Video Scaler: new Scale slider** — with **Custom size** chosen, slide from the centre (×1, the source size) left to shrink down to ×0.3, or right to enlarge up to ×3. The width and height fill in for you, and follow when you pick another file. Typing a size or choosing a preset puts it back to ×1.
+- **Video Scaler layout** — Codec and Quality now come first, with Resolution and the Scale slider together underneath.
+- **Linux:** the taskbar shows **FFmpeg Toolkit** and its icon instead of "Tk".
 
 ## 🆕 What's new in 10.0
 
@@ -42,7 +48,7 @@ See the [Changelog](#-changelog) for the details, including the 9.3 fixes.
 | **Stubborn Fix** | Specifically optimized for DaVinci Resolve import errors. Forces a fast video stream copy but converts the audio track into uncompressed 16-bit PCM wrapped in a `.mov` container — ensuring the audio track never goes missing on the editing timeline. |
 | **Fix Timestamps** | Rebuilds corrupt or missing presentation timestamps using `+genpts+igndts`, eliminating playback stuttering and audio sync drift in Resolve. |
 | **Proxy Creator** | Generates lightweight, editing-optimized `.mov` proxies with Rec.709 colour tags (no washed-out gamma shift in Resolve) and uncompressed PCM audio for lag-free scrubbing. |
-| **Video Scaler** | Resizes a video for sharing, uploading or saving space. Resolution presets (2160p…360p) set the *short* side so portrait phone video is handled correctly; also 50% / 25% and custom sizes. |
+| **Video Scaler** | Resizes a video for sharing, uploading or saving space. Resolution presets (2160p…360p) set the *short* side so portrait phone video is handled correctly; also 50% / 25% and custom sizes, with a Scale slider (×0.3 to ×3) for custom sizes. |
 | **ProRes Export** | Converts video to Apple ProRes (Proxy / LT / 422 / HQ / 4444 / 4444 XQ). Smart colour tagging, HDR handling (keep HLG/PQ or tone-map to SDR Rec.709), constant-frame-rate conforming for phone footage, every audio track as 24-bit PCM, and an up-front output size estimate with a free-space check. |
 | **Batch ProRes Export** | The same ProRes conversion for a whole folder at once, with per-file size estimates and select all / none. |
 | **Clip & Track Editor** | Losslessly cuts a section of video and/or picks which audio and subtitle tracks to keep, without re-encoding. Built-in preview player and a range slider for the start and end points. Uses output seeking to avoid black or frozen first frames and zeroes timestamps for Resolve. |
@@ -95,7 +101,7 @@ When you pick an input file, the **Output File** box fills in a suggested name w
 ## 🚀 Quick Start (Windows)
 
 ### Option A — Download the portable EXE
-1. Go to **Releases** (right-hand side of this page) and download `ffmpeg_toolkit_v10-0-W.exe` from the **Assets** of the latest release.
+1. Go to **Releases** (right-hand side of this page) and download `ffmpeg_toolkit_v10-1-W.exe` from the **Assets** of the latest release.
 2. Put copies of `ffmpeg.exe` and `ffprobe.exe` in the same folder.
 3. Double-click the EXE — no installation needed.
 
@@ -103,13 +109,13 @@ When you pick an input file, the **Output File** box fills in a suggested name w
 
 ### Option B — Build the EXE yourself
 1. Download this repository (**Code → Download ZIP**) and extract it.
-2. Double-click `build.bat` and, when asked, enter the number shown next to `ffmpeg_toolkit_v10-0-W.py`.
-3. The finished `ffmpeg_toolkit_v10-0-W.exe` appears in the new `dist\` folder. Copy it, with `ffmpeg.exe` and `ffprobe.exe`, to any folder you like.
+2. Double-click `build.bat` and, when asked, enter the number shown next to `ffmpeg_toolkit_v10-1-W.py`.
+3. The finished `ffmpeg_toolkit_v10-1-W.exe` appears in the new `dist\` folder. Copy it, with `ffmpeg.exe` and `ffprobe.exe`, to any folder you like.
 
 ### Option C — Run from source
 ```bash
 pip install -r requirements.txt
-python ffmpeg_toolkit_v10-0-W.py
+python ffmpeg_toolkit_v10-1-W.py
 ```
 
 ---
@@ -129,7 +135,7 @@ Everything for Linux is in the **`LINUX PACKAGE`** folder.
    ./run.sh
    ```
 
-**Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v10-1-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **10.1-L**).
+**Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v10-2-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **10.2-L**).
 
 See [`LINUX PACKAGE/README.txt`](LINUX%20PACKAGE/README.txt) for troubleshooting, uninstalling and building an optional stand-alone Linux program.
 
@@ -139,7 +145,7 @@ See [`LINUX PACKAGE/README.txt`](LINUX%20PACKAGE/README.txt) for troubleshooting
 
 ```
 FFmpeg-Toolkit/
-├── ffmpeg_toolkit_v10-0-W.py    # The app (Windows)
+├── ffmpeg_toolkit_v10-1-W.py    # The app (Windows)
 ├── build.bat                    # Builds the Windows EXE with PyInstaller
 ├── generate_ico.py              # Regenerates app_icon.ico during the build
 ├── icon_source.jpg              # Artwork for the icon
@@ -151,7 +157,7 @@ FFmpeg-Toolkit/
 ├── assets/                      # Source artwork for icons embedded in the code
 ├── screenshots/                 # Images used in this README
 └── LINUX PACKAGE/
-    ├── ffmpeg_toolkit_v10-1-L.py # The app (Linux)
+    ├── ffmpeg_toolkit_v10-2-L.py # The app (Linux)
     ├── install.sh               # One-time installer
     ├── run.sh                   # Launcher (always runs the newest version)
     ├── app_icon.png             # Menu / desktop icon
@@ -188,6 +194,11 @@ GitHub: [github.com/SunflowerGUY](https://github.com/SunflowerGUY)
 ---
 
 ## 📝 Changelog
+
+**v10.1 (Windows) / v10.2-L (Linux)** — 10 October 2026
+- **Video Scaler**: new **Scale** slider for custom sizes — ×1 in the centre, down to ×0.3 or up to ×3, in steps of 0.05. It fills in the width and height from the source's size and re-applies when you choose another file. It's greyed out unless Resolution is **Custom size**, and goes back to ×1 when you type a size or pick a preset.
+- **Video Scaler**: the Codec / Quality row now sits above Resolution.
+- The Linux taskbar fix from 10.1-L is in both versions.
 
 **v10.1-L** — 9 October 2026 (Linux only)
 - The taskbar now shows **FFmpeg Toolkit** and its icon instead of "Tk". Re-run `bash install.sh` once to update the menu entry as well.
