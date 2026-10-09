@@ -129,7 +129,7 @@ Everything for Linux is in the **`LINUX PACKAGE`** folder.
    ./run.sh
    ```
 
-**Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v10-0-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **10.0-L**).
+**Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v10-1-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **10.1-L**).
 
 See [`LINUX PACKAGE/README.txt`](LINUX%20PACKAGE/README.txt) for troubleshooting, uninstalling and building an optional stand-alone Linux program.
 
@@ -151,7 +151,7 @@ FFmpeg-Toolkit/
 ├── assets/                      # Source artwork for icons embedded in the code
 ├── screenshots/                 # Images used in this README
 └── LINUX PACKAGE/
-    ├── ffmpeg_toolkit_v10-0-L.py # The app (Linux)
+    ├── ffmpeg_toolkit_v10-1-L.py # The app (Linux)
     ├── install.sh               # One-time installer
     ├── run.sh                   # Launcher (always runs the newest version)
     ├── app_icon.png             # Menu / desktop icon
@@ -188,6 +188,9 @@ GitHub: [github.com/SunflowerGUY](https://github.com/SunflowerGUY)
 ---
 
 ## 📝 Changelog
+
+**v10.1-L** — 9 October 2026 (Linux only)
+- The taskbar now shows **FFmpeg Toolkit** and its icon instead of "Tk". Re-run `bash install.sh` once to update the menu entry as well.
 
 **v10.0** — 29 September 2026
 - **New look**: dark "dashboard" theme matching JJ's Battery Health Analyser — navy background, rounded card panels, card-style sidebar with a highlighted current tool, status badges, and the Segoe UI font (DejaVu Sans on Linux).

@@ -47,7 +47,8 @@ Exec=\"$APP_DIR/run.sh\"
 Icon=$APP_DIR/app_icon.png
 Terminal=false
 Categories=AudioVideo;Video;Audio;
-StartupNotify=true"
+StartupNotify=true
+StartupWMClass=Ffmpeg-toolkit"
 
 MENU_DIR="$HOME/.local/share/applications"
 mkdir -p "$MENU_DIR"

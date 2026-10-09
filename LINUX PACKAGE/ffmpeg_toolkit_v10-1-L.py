@@ -19,8 +19,8 @@ from tkinter import filedialog, messagebox, Menu, ttk
 from PIL import Image as PilImage, ImageDraw, ImageTk
 
 
-APP_VERSION = "10.0-L"
-BUILD_DATE = "29 September 2026"
+APP_VERSION = "10.1-L"
+BUILD_DATE = "9 October 2026"
 
 # ---------------------------------------------------------------- dashboard look
 # Palette from JJ's Battery Health Analyser (ui_theme.py), so the apps match.
@@ -498,7 +498,10 @@ class CTkToolTip:
 
 class FFmpegToolkit(ctk.CTk):
     def __init__(self):
-        super().__init__()
+        # Linux taskbars label the window by its WM_CLASS, which Tk otherwise
+        # sets to "Tk". Tk turns this into "Ffmpeg-toolkit", which the desktop
+        # matches to install.sh's ffmpeg-toolkit.desktop for the name and icon.
+        super().__init__(className="ffmpeg-toolkit")
 
         self.title(f"FFmpeg Toolkit - (ver: {APP_VERSION} - build: {BUILD_DATE})")
 
