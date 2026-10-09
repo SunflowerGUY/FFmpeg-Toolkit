@@ -1,6 +1,6 @@
 # FFmpeg Toolkit 🎬🔧
 
-**Version 10.1** — 10 October 2026
+**Version 10.2** — 10 October 2026
 
 A Vibe Coded, feature-rich, dark-themed desktop GUI for [FFmpeg](https://ffmpeg.org) built with Python and CustomTkinter, for **Windows** and **Linux**.
 Designed for content creators who work with audio editors and video editors such as [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve) — fix, convert, inspect and process video files without touching the command line.
@@ -13,6 +13,15 @@ Designed for content creators who work with audio editors and video editors such
 ![Main Interface](screenshots/Screenshot-v10-0.png)
 
 ---
+
+## 🆕 What's new in 10.2
+
+- **New tool: Video Crop & Stretch** — removes black edges from old or badly converted video, in two modes:
+  - **Stretch Mode** trims the edges and stretches the picture back to fill the frame, so the frame size stays the same (a 960×720 video stays 960×720).
+  - **Crop Mode** trims the edges and the frame gets smaller (960×720 becomes 936×720).
+  - Use the on-screen arrow keys or the keyboard's arrow keys: **→ / ←** trim more or less off the sides, **↑ / ↓** off the top and bottom. The picture always stays centred.
+  - A live preview in a pale-blue frame (so black edges stand out), with a time slider and a **Before / After** switch.
+- **Taller window** — the app now opens at 1150×845 (smaller screens get a window that fits).
 
 ## 🆕 What's new in 10.1
 
@@ -49,6 +58,7 @@ See the [Changelog](#-changelog) for the details, including the 9.3 fixes.
 | **Fix Timestamps** | Rebuilds corrupt or missing presentation timestamps using `+genpts+igndts`, eliminating playback stuttering and audio sync drift in Resolve. |
 | **Proxy Creator** | Generates lightweight, editing-optimized `.mov` proxies with Rec.709 colour tags (no washed-out gamma shift in Resolve) and uncompressed PCM audio for lag-free scrubbing. |
 | **Video Scaler** | Resizes a video for sharing, uploading or saving space. Resolution presets (2160p…360p) set the *short* side so portrait phone video is handled correctly; also 50% / 25% and custom sizes, with a Scale slider (×0.3 to ×3) for custom sizes. |
+| **Video Crop & Stretch** | Removes black edges. **Stretch Mode** trims them and stretches the picture back to the original frame size (keeping the original pixel shape); **Crop Mode** trims them and the frame gets smaller. Arrow keys (on screen or on the keyboard) trim in 2-pixel steps per side, always centred, with a live Before / After preview. All audio tracks are copied untouched. |
 | **ProRes Export** | Converts video to Apple ProRes (Proxy / LT / 422 / HQ / 4444 / 4444 XQ). Smart colour tagging, HDR handling (keep HLG/PQ or tone-map to SDR Rec.709), constant-frame-rate conforming for phone footage, every audio track as 24-bit PCM, and an up-front output size estimate with a free-space check. |
 | **Batch ProRes Export** | The same ProRes conversion for a whole folder at once, with per-file size estimates and select all / none. |
 | **Clip & Track Editor** | Losslessly cuts a section of video and/or picks which audio and subtitle tracks to keep, without re-encoding. Built-in preview player and a range slider for the start and end points. Uses output seeking to avoid black or frozen first frames and zeroes timestamps for Resolve. |
@@ -101,7 +111,7 @@ When you pick an input file, the **Output File** box fills in a suggested name w
 ## 🚀 Quick Start (Windows)
 
 ### Option A — Download the portable EXE
-1. Go to **Releases** (right-hand side of this page) and download `ffmpeg_toolkit_v10-1-W.exe` from the **Assets** of the latest release.
+1. Go to **Releases** (right-hand side of this page) and download `ffmpeg_toolkit_v10-2-W.exe` from the **Assets** of the latest release.
 2. Put copies of `ffmpeg.exe` and `ffprobe.exe` in the same folder.
 3. Double-click the EXE — no installation needed.
 
@@ -109,13 +119,13 @@ When you pick an input file, the **Output File** box fills in a suggested name w
 
 ### Option B — Build the EXE yourself
 1. Download this repository (**Code → Download ZIP**) and extract it.
-2. Double-click `build.bat` and, when asked, enter the number shown next to `ffmpeg_toolkit_v10-1-W.py`.
-3. The finished `ffmpeg_toolkit_v10-1-W.exe` appears in the new `dist\` folder. Copy it, with `ffmpeg.exe` and `ffprobe.exe`, to any folder you like.
+2. Double-click `build.bat` and, when asked, enter the number shown next to `ffmpeg_toolkit_v10-2-W.py`.
+3. The finished `ffmpeg_toolkit_v10-2-W.exe` appears in the new `dist\` folder. Copy it, with `ffmpeg.exe` and `ffprobe.exe`, to any folder you like.
 
 ### Option C — Run from source
 ```bash
 pip install -r requirements.txt
-python ffmpeg_toolkit_v10-1-W.py
+python ffmpeg_toolkit_v10-2-W.py
 ```
 
 ---
@@ -135,7 +145,7 @@ Everything for Linux is in the **`LINUX PACKAGE`** folder.
    ./run.sh
    ```
 
-**Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v10-2-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **10.2-L**).
+**Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v10-3-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **10.3-L**).
 
 See [`LINUX PACKAGE/README.txt`](LINUX%20PACKAGE/README.txt) for troubleshooting, uninstalling and building an optional stand-alone Linux program.
 
@@ -145,7 +155,7 @@ See [`LINUX PACKAGE/README.txt`](LINUX%20PACKAGE/README.txt) for troubleshooting
 
 ```
 FFmpeg-Toolkit/
-├── ffmpeg_toolkit_v10-1-W.py    # The app (Windows)
+├── ffmpeg_toolkit_v10-2-W.py    # The app (Windows)
 ├── build.bat                    # Builds the Windows EXE with PyInstaller
 ├── generate_ico.py              # Regenerates app_icon.ico during the build
 ├── icon_source.jpg              # Artwork for the icon
@@ -157,7 +167,7 @@ FFmpeg-Toolkit/
 ├── assets/                      # Source artwork for icons embedded in the code
 ├── screenshots/                 # Images used in this README
 └── LINUX PACKAGE/
-    ├── ffmpeg_toolkit_v10-2-L.py # The app (Linux)
+    ├── ffmpeg_toolkit_v10-3-L.py # The app (Linux)
     ├── install.sh               # One-time installer
     ├── run.sh                   # Launcher (always runs the newest version)
     ├── app_icon.png             # Menu / desktop icon
@@ -194,6 +204,10 @@ GitHub: [github.com/SunflowerGUY](https://github.com/SunflowerGUY)
 ---
 
 ## 📝 Changelog
+
+**v10.2 (Windows) / v10.3-L (Linux)** — 10 October 2026
+- **New tool: Video Crop & Stretch** (under Video Scaler). Trims black edges, then either stretches the picture back to the original frame size, keeping the original pixel shape (**Stretch Mode**), or leaves the frame smaller (**Crop Mode**). On-screen arrow keys (a 90×90 key pad) and the keyboard's arrow keys stretch in 2-pixel steps per side; hold a key to repeat. Live preview in a pale-blue frame with a time slider, Before / After and Reset, plus a short "How it works" panel next to Run / Abort.
+- **Window** opens at 1150×845, capped to the screen height.
 
 **v10.1 (Windows) / v10.2-L (Linux)** — 10 October 2026
 - **Video Scaler**: new **Scale** slider for custom sizes — ×1 in the centre, down to ×0.3 or up to ×3, in steps of 0.05. It fills in the width and height from the source's size and re-applies when you choose another file. It's greyed out unless Resolution is **Custom size**, and goes back to ×1 when you type a size or pick a preset.
