@@ -9,8 +9,8 @@ Designed for content creators who work with audio editors and video editors such
 
 ## 📸 Screenshot
 
-**Main Interface — v10.0 (Clip & Track Editor)**
-![Main Interface](screenshots/Screenshot-v10-0.png)
+**Main Interface — v10.2 (Video Crop & Stretch)**
+![Main Interface](screenshots/Screenshot-v10-2-W.png)
 
 ---
 
