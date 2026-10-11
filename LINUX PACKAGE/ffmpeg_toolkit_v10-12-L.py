@@ -12,6 +12,8 @@ import subprocess
 import tempfile
 import threading
 import queue
+import ctypes
+import ctypes.util
 import webbrowser
 import tkinter as tk
 import customtkinter as ctk
@@ -19,8 +21,8 @@ from tkinter import filedialog, messagebox, Menu, ttk
 from PIL import Image as PilImage, ImageDraw, ImageTk
 
 
-APP_VERSION = "10.4-L"
-BUILD_DATE = "10 October 2026"
+APP_VERSION = "10.12-L"
+BUILD_DATE = "12 October 2026"
 
 # ---------------------------------------------------------------- dashboard look
 # Palette from JJ's Battery Health Analyser (ui_theme.py), so the apps match.
@@ -197,6 +199,328 @@ if sys.platform == "win32":
         "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
     }
 
+class _XKeyEvent(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_int), ("serial", ctypes.c_ulong),
+        ("send_event", ctypes.c_int), ("display", ctypes.c_void_p),
+        ("window", ctypes.c_ulong), ("root", ctypes.c_ulong),
+        ("subwindow", ctypes.c_ulong), ("time", ctypes.c_ulong),
+        ("x", ctypes.c_int), ("y", ctypes.c_int),
+        ("x_root", ctypes.c_int), ("y_root", ctypes.c_int),
+        ("state", ctypes.c_uint), ("keycode", ctypes.c_uint),
+        ("same_screen", ctypes.c_int),
+    ]
+
+
+class _XEvent(ctypes.Union):
+    _fields_ = [("xkey", _XKeyEvent), ("pad", ctypes.c_long * 24)]
+
+
+class _XWindowAttributes(ctypes.Structure):
+    _fields_ = [
+        ("x", ctypes.c_int), ("y", ctypes.c_int),
+        ("width", ctypes.c_int), ("height", ctypes.c_int),
+        ("border_width", ctypes.c_int), ("depth", ctypes.c_int),
+        ("visual", ctypes.c_void_p), ("root", ctypes.c_ulong),
+        ("class_", ctypes.c_int), ("bit_gravity", ctypes.c_int),
+        ("win_gravity", ctypes.c_int), ("backing_store", ctypes.c_int),
+        ("backing_planes", ctypes.c_ulong), ("backing_pixel", ctypes.c_ulong),
+        ("save_under", ctypes.c_int), ("colormap", ctypes.c_ulong),
+        ("map_installed", ctypes.c_int), ("map_state", ctypes.c_int),
+        ("all_event_masks", ctypes.c_long), ("your_event_mask", ctypes.c_long),
+        ("do_not_propagate_mask", ctypes.c_long),
+        ("override_redirect", ctypes.c_int), ("screen", ctypes.c_void_p),
+    ]
+
+
+class X11Windows:
+    """Just enough of libX11 (through ctypes, so nothing extra to install) to do
+    on Linux what user32 does on Windows for the clip preview: find ffplay's
+    window by its title, embed it in a Tk frame, pop it back out, and send it
+    key presses. Works on X11 and XWayland. Every call quietly returns
+    None/False when it can't, so the caller falls back to a separate window."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._lib = None
+        self._display = None
+        self._tried = False
+        self._error_handler = None
+
+    def _connect(self):
+        """Open our own X connection on first use. False if there's no X."""
+        if self._display:
+            return True
+        if self._tried:
+            return False
+        self._tried = True
+        try:
+            lib = ctypes.cdll.LoadLibrary(ctypes.util.find_library("X11") or "libX11.so.6")
+            vp, ul, c_int = ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int
+            lib.XOpenDisplay.restype = vp
+            lib.XOpenDisplay.argtypes = [ctypes.c_char_p]
+            lib.XDefaultRootWindow.restype = ul
+            lib.XDefaultRootWindow.argtypes = [vp]
+            lib.XInternAtom.restype = ul
+            lib.XInternAtom.argtypes = [vp, ctypes.c_char_p, c_int]
+            lib.XQueryTree.argtypes = [
+                vp, ul, ctypes.POINTER(ul), ctypes.POINTER(ul),
+                ctypes.POINTER(ctypes.POINTER(ul)), ctypes.POINTER(ctypes.c_uint),
+            ]
+            lib.XGetWindowProperty.argtypes = [
+                vp, ul, ul, ctypes.c_long, ctypes.c_long, c_int, ul,
+                ctypes.POINTER(ul), ctypes.POINTER(c_int), ctypes.POINTER(ul),
+                ctypes.POINTER(ul), ctypes.POINTER(ctypes.POINTER(ctypes.c_ubyte)),
+            ]
+            lib.XFree.argtypes = [vp]
+            for name in ("XUnmapWindow", "XMapWindow", "XRaiseWindow"):
+                getattr(lib, name).argtypes = [vp, ul]
+            lib.XReparentWindow.argtypes = [vp, ul, ul, c_int, c_int]
+            lib.XMoveResizeWindow.argtypes = [vp, ul, c_int, c_int, ctypes.c_uint, ctypes.c_uint]
+            lib.XSync.argtypes = [vp, c_int]
+            lib.XGrabServer.argtypes = [vp]
+            lib.XUngrabServer.argtypes = [vp]
+            lib.XGetWindowAttributes.argtypes = [vp, ul, ctypes.POINTER(_XWindowAttributes)]
+            lib.XKeysymToKeycode.restype = ctypes.c_ubyte
+            lib.XKeysymToKeycode.argtypes = [vp, ul]
+            lib.XSendEvent.argtypes = [vp, ul, c_int, ctypes.c_long, ctypes.POINTER(_XEvent)]
+            lib.XSetErrorHandler.restype = vp
+            lib.XSetErrorHandler.argtypes = [vp]
+
+            display = lib.XOpenDisplay(None)
+            if not display:
+                return False
+
+            # Xlib's default error handler exits the whole app, and ffplay's
+            # window can vanish mid-call when a clip ends. Ignore errors on our
+            # own connection; pass anything else on to Tk's handler.
+            handler_type = ctypes.CFUNCTYPE(c_int, vp, vp)
+            previous = []
+
+            def on_error(err_display, event):
+                if err_display == display:
+                    return 0
+                return previous[0](err_display, event) if previous else 0
+
+            self._error_handler = handler_type(on_error)
+            old = lib.XSetErrorHandler(ctypes.cast(self._error_handler, vp))
+            if old:
+                previous.append(handler_type(old))
+            self._lib, self._display = lib, display
+            return True
+        except Exception:
+            return False
+
+    def _text_property(self, window, atom):
+        lib, d = self._lib, self._display
+        actual_type, actual_format = ctypes.c_ulong(), ctypes.c_int()
+        nitems, after = ctypes.c_ulong(), ctypes.c_ulong()
+        data = ctypes.POINTER(ctypes.c_ubyte)()
+        status = lib.XGetWindowProperty(
+            d, window, atom, 0, 1024, False, 0, ctypes.byref(actual_type),
+            ctypes.byref(actual_format), ctypes.byref(nitems), ctypes.byref(after),
+            ctypes.byref(data),
+        )
+        if status != 0 or not data:
+            return None
+        try:
+            if actual_format.value != 8:
+                return None
+            return ctypes.string_at(data, nitems.value).decode("utf-8", "replace")
+        finally:
+            lib.XFree(data)
+
+    def _cardinal_property(self, window, atom):
+        """First number of a 32-bit property such as _NET_WM_PID, or None."""
+        lib, d = self._lib, self._display
+        actual_type, actual_format = ctypes.c_ulong(), ctypes.c_int()
+        nitems, after = ctypes.c_ulong(), ctypes.c_ulong()
+        data = ctypes.POINTER(ctypes.c_ubyte)()
+        status = lib.XGetWindowProperty(
+            d, window, atom, 0, 1, False, 0, ctypes.byref(actual_type),
+            ctypes.byref(actual_format), ctypes.byref(nitems), ctypes.byref(after),
+            ctypes.byref(data),
+        )
+        if status != 0 or not data:
+            return None
+        try:
+            if actual_format.value != 32 or nitems.value < 1:
+                return None
+            return ctypes.cast(data, ctypes.POINTER(ctypes.c_ulong))[0]
+        finally:
+            lib.XFree(data)
+
+    def _tree(self, window):
+        """(parent, [children]) of a window, or (None, []) if it's gone."""
+        lib, d = self._lib, self._display
+        root, parent = ctypes.c_ulong(), ctypes.c_ulong()
+        children = ctypes.POINTER(ctypes.c_ulong)()
+        count = ctypes.c_uint()
+        if not lib.XQueryTree(d, window, ctypes.byref(root), ctypes.byref(parent),
+                              ctypes.byref(children), ctypes.byref(count)):
+            return None, []
+        kids = [children[i] for i in range(count.value)]
+        if children:
+            lib.XFree(children)
+        return parent.value, kids
+
+    def find_window(self, title, pid=None, deep=True):
+        """Find ffplay's window. With `pid`, first look for a top-level window
+        owned by that process: that's quick, and it finds the window while
+        ffplay still has it hidden (before its title is set). With `deep`,
+        then search the whole tree for the deepest window owned by `pid` or
+        titled `title` (a window manager's frame can carry the same name)."""
+        if not title and not pid:
+            return None
+        with self._lock:
+            if not self._connect():
+                return None
+            try:
+                lib, d = self._lib, self._display
+                root = lib.XDefaultRootWindow(d)
+                pid_atom = lib.XInternAtom(d, b"_NET_WM_PID", False)
+                if pid:
+                    for window in self._tree(root)[1]:
+                        if self._cardinal_property(window, pid_atom) == pid:
+                            return window
+                if not deep:
+                    return None
+                atoms = (lib.XInternAtom(d, b"_NET_WM_NAME", False), 39)  # 39 = WM_NAME
+                best, best_depth = None, -1
+                stack = [(root, 0)]
+                while stack:
+                    window, depth = stack.pop()
+                    if depth > best_depth:
+                        if pid and self._cardinal_property(window, pid_atom) == pid:
+                            best, best_depth = window, depth
+                        elif title:
+                            for atom in atoms:
+                                name = self._text_property(window, atom)
+                                if name and name.startswith(title):
+                                    best, best_depth = window, depth
+                                    break
+                    stack.extend((child, depth + 1) for child in self._tree(window)[1])
+                return best
+            except Exception:
+                return None
+
+    def claim_hidden(self, window, parent, width, height):
+        """If the window hasn't been shown yet, move it into `parent` now, so
+        when ffplay shows it, it appears straight inside the preview panel
+        and the window manager never sees it. False if it's already showing.
+        The server is grabbed so ffplay can't show it halfway through."""
+        with self._lock:
+            if not self._connect():
+                return False
+            lib, d = self._lib, self._display
+            root = lib.XDefaultRootWindow(d)
+            lib.XGrabServer(d)
+            try:
+                attrs = _XWindowAttributes()
+                ok = lib.XGetWindowAttributes(d, window, ctypes.byref(attrs))
+                if not ok or attrs.map_state != 0 or self._tree(window)[0] != root:
+                    return False  # 0 = IsUnmapped; a frame parent means it's managed
+                lib.XReparentWindow(d, window, parent, 0, 0)
+                lib.XMoveResizeWindow(d, window, 0, 0, max(width, 1), max(height, 1))
+                return True
+            finally:
+                lib.XUngrabServer(d)
+                lib.XSync(d, False)
+
+    def release_from_wm(self, window, timeout=1.5):
+        """Hide the window and wait for the window manager to let go of it.
+        Otherwise the WM can grab it back moments after it's embedded.
+        Blocks, so call it from a worker thread."""
+        with self._lock:
+            if not self._connect():
+                return False
+            lib, d = self._lib, self._display
+            root = lib.XDefaultRootWindow(d)
+            lib.XUnmapWindow(d, window)
+            lib.XSync(d, False)
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            time.sleep(0.05)
+            with self._lock:
+                parent, _ = self._tree(window)
+            if parent is None:
+                return False
+            if parent == root:
+                time.sleep(0.05)  # let the WM finish tidying its frame away
+                return True
+        return True  # no window manager frame (or a slow WM): carry on anyway
+
+    def embed(self, window, parent, width, height):
+        with self._lock:
+            if not self._connect():
+                return False
+            lib, d = self._lib, self._display
+            current_parent, _ = self._tree(window)
+            if current_parent is None:
+                return False
+            if current_parent != parent:
+                lib.XReparentWindow(d, window, parent, 0, 0)
+            lib.XMoveResizeWindow(d, window, 0, 0, max(width, 1), max(height, 1))
+            lib.XMapWindow(d, window)
+            lib.XSync(d, False)
+            return True
+
+    def unembed(self, window):
+        """Hand the window back to the desktop as a normal window."""
+        with self._lock:
+            if not self._connect():
+                return False
+            lib, d = self._lib, self._display
+            lib.XUnmapWindow(d, window)
+            lib.XReparentWindow(d, window, lib.XDefaultRootWindow(d), 100, 100)
+            lib.XMoveResizeWindow(d, window, 100, 100, 960, 600)
+            lib.XMapWindow(d, window)
+            lib.XRaiseWindow(d, window)
+            lib.XSync(d, False)
+            return True
+
+    def move_resize(self, window, x, y, width, height):
+        with self._lock:
+            if not self._connect():
+                return False
+            lib, d = self._lib, self._display
+            lib.XMoveResizeWindow(d, window, x, y, max(width, 1), max(height, 1))
+            lib.XSync(d, False)
+            return True
+
+    def raise_window(self, window):
+        with self._lock:
+            if not self._connect():
+                return False
+            lib, d = self._lib, self._display
+            lib.XMapWindow(d, window)
+            lib.XRaiseWindow(d, window)
+            lib.XSync(d, False)
+            return True
+
+    def send_key(self, window, keysym):
+        with self._lock:
+            if not self._connect():
+                return False
+            lib, d = self._lib, self._display
+            keycode = lib.XKeysymToKeycode(d, keysym)
+            if not keycode:
+                return False
+            event = _XEvent()
+            key = event.xkey
+            key.display, key.window = d, window
+            key.root = lib.XDefaultRootWindow(d)
+            key.keycode, key.same_screen = keycode, 1
+            key.x = key.y = key.x_root = key.y_root = 1
+            for event_type, mask in ((2, 1), (3, 2)):  # KeyPress, KeyRelease
+                key.type = event_type
+                lib.XSendEvent(d, window, True, mask, ctypes.byref(event))
+            lib.XSync(d, False)
+            return True
+
+
+X11 = X11Windows()
+
 ASPECT_RATIO_STANDARDS = {
     1.0: "1:1 (Square)",
     1.333: "4:3 (Legacy / Academy)",
@@ -252,6 +576,9 @@ FFMPEG_BINARY_NAME = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
 FFPROBE_BINARY_NAME = "ffprobe.exe" if sys.platform == "win32" else "ffprobe"
 FFPLAY_BINARY_NAME = "ffplay.exe" if sys.platform == "win32" else "ffplay"
 EASTER_EGG_VIDEO = "Ffffreddy.mp4"  # loose file shipped next to the app
+# Help > Support and the coffee link in Help > About (from coffee_support.py).
+DONATE_URL = "https://paypal.me/jellyjazzsoftware"
+COFFEE = "#f57c00"      # the orange coffee link, and links when hovered
 
 # Fonts and the log viewer's name differ by platform: Consolas / Segoe UI and
 # Notepad only exist on Windows, and Tk silently swaps a missing font for a
@@ -521,7 +848,7 @@ class FFmpegToolkit(ctk.CTk):
             icon_path = pathlib.Path(__file__).parent / "app_icon.ico"
         if sys.platform == "win32":
             if icon_path.exists():
-                self.iconbitmap(str(icon_path))
+                self._use_icon_for_all_windows(str(icon_path))
         else:
             # Tk on Linux/macOS can't read .ico files (iconbitmap raises), so
             # use the built-in logo image as the window icon instead.
@@ -625,6 +952,25 @@ class FFmpegToolkit(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
         self._pump_job = self.after(30, self._pump_ui_queue)
 
+    def _use_icon_for_all_windows(self, ico_path):
+        """Windows: give the main window AND every pop-up the app icon.
+        default= covers plain Tk windows; CTkToplevel swaps in CustomTkinter's
+        own icon 200 ms after it opens, so that step is redirected to ours.
+        (Linux needs none of this: iconphoto(True, ...) covers every window.)"""
+        self.iconbitmap(ico_path)
+        try:
+            self.iconbitmap(default=ico_path)
+        except tk.TclError:
+            pass
+
+        def set_app_icon(toplevel):
+            try:
+                toplevel.iconbitmap(ico_path)
+            except Exception:
+                pass
+
+        ctk.CTkToplevel._windows_set_titlebar_icon = set_app_icon
+
     def _run_on_main(self, fn):
         """Thread-safe way to run fn on the Tk main thread."""
         self._ui_queue.put(fn)
@@ -673,8 +1019,15 @@ class FFmpegToolkit(ctk.CTk):
 
             threading.Thread(target=wait_and_kill, daemon=True).start()
 
-    def _find_ffplay_hwnd(self, window_title):
-        if sys.platform != "win32" or not window_title:
+    # The preview helpers below take a window handle: an HWND on Windows, an X
+    # window id on Linux (see X11Windows). Elsewhere they do nothing.
+
+    def _find_ffplay_hwnd(self, window_title, pid=None, deep=True):
+        if sys.platform.startswith("linux"):
+            return X11.find_window(window_title, pid, deep)
+        if not window_title:
+            return None
+        if sys.platform != "win32":
             return None
         try:
             import ctypes
@@ -700,9 +1053,26 @@ class FFmpegToolkit(ctk.CTk):
         except Exception:
             return None
 
+    def _prepare_embed(self, hwnd, host_id=None, width=0, height=0):
+        """Groundwork before embedding; run from a worker thread. On Linux,
+        a window caught while still hidden goes straight into the host frame;
+        one already on screen must first be let go by the window manager."""
+        if sys.platform.startswith("linux") and hwnd:
+            if host_id and X11.claim_hidden(hwnd, host_id, width, height):
+                return
+            X11.release_from_wm(hwnd)
+
     def _embed_external_window(self, hwnd, container):
         """Reparent an external top-level window (ffplay's SDL window) into a
-        Tk widget so it renders inside our own preview area. Windows-only."""
+        Tk widget so it renders inside our own preview area."""
+        if sys.platform.startswith("linux"):
+            try:
+                return X11.embed(
+                    hwnd, container.winfo_id(),
+                    container.winfo_width(), container.winfo_height(),
+                )
+            except Exception:
+                return False
         if sys.platform != "win32":
             return False
         try:
@@ -738,20 +1108,42 @@ class FFmpegToolkit(ctk.CTk):
         except Exception:
             return False
 
+    def _move_embedded_window(self, hwnd, width, height):
+        """Fit an embedded preview window to its host frame."""
+        if not hwnd:
+            return
+        if sys.platform.startswith("linux"):
+            X11.move_resize(hwnd, 0, 0, width, height)
+        elif sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.user32.MoveWindow(hwnd, 0, 0, width, height, True)
+            except Exception:
+                pass
+
     def _bring_ffplay_to_front(self, window_title, attempts=10):
-        if sys.platform != "win32":
+        """Show a preview window that couldn't be embedded. ffplay starts it
+        off-screen (see start_playback), so it is moved into view as well."""
+        if sys.platform != "win32" and not sys.platform.startswith("linux"):
             return
 
         def worker():
-            import ctypes
-
-            user32 = ctypes.windll.user32
             for _ in range(attempts):
                 hwnd = self._find_ffplay_hwnd(window_title)
                 if hwnd:
+                    if sys.platform.startswith("linux"):
+                        X11.move_resize(hwnd, 100, 100, 960, 600)
+                        X11.raise_window(hwnd)
+                        return
                     try:
+                        import ctypes
+
+                        user32 = ctypes.windll.user32
                         SW_RESTORE = 9
+                        SWP_NOSIZE = 0x0001
+                        SWP_NOZORDER = 0x0004
                         user32.ShowWindow(hwnd, SW_RESTORE)
+                        user32.SetWindowPos(hwnd, 0, 100, 100, 0, 0, SWP_NOSIZE | SWP_NOZORDER)
                         user32.SetForegroundWindow(hwnd)
                     except Exception:
                         pass
@@ -761,16 +1153,23 @@ class FFmpegToolkit(ctk.CTk):
         threading.Thread(target=worker, daemon=True).start()
 
     def _send_ffplay_pause_toggle(self, hwnd):
-        """Best-effort: post a Spacebar keypress to the ffplay preview window
-        to toggle play/pause. Windows-only; returns False if it can't be done.
+        """Best-effort: send a Spacebar keypress to the ffplay preview window
+        to toggle play/pause; returns False if it can't be done.
         Takes the hwnd directly rather than searching by title, because once
         a window is embedded (reparented as a child) it's no longer a
         top-level window and FindWindow/EnumWindows can no longer see it."""
         return self._send_ffplay_key(hwnd, 0x20)  # VK_SPACE
 
     def _send_ffplay_key(self, hwnd, vk_code):
-        """Post a virtual-key press to the given window. Windows-only."""
-        if sys.platform != "win32" or not hwnd:
+        """Send a key press to the given window. Takes a Windows virtual-key
+        code; on Linux it's turned into the matching X keysym."""
+        if not hwnd:
+            return False
+        if sys.platform.startswith("linux"):
+            # Letters: VK 'M' (0x4D) -> XK_m (0x6d). Space is 0x20 in both.
+            keysym = vk_code + 0x20 if 0x41 <= vk_code <= 0x5A else vk_code
+            return X11.send_key(hwnd, keysym)
+        if sys.platform != "win32":
             return False
         try:
             import ctypes
@@ -790,8 +1189,12 @@ class FFmpegToolkit(ctk.CTk):
 
     def _unembed_window(self, hwnd):
         """Reverse of _embed_external_window: restore the window as a normal,
-        bordered top-level window and bring it to the front. Windows-only."""
-        if sys.platform != "win32" or not hwnd:
+        bordered top-level window and bring it to the front."""
+        if not hwnd:
+            return False
+        if sys.platform.startswith("linux"):
+            return X11.unembed(hwnd)
+        if sys.platform != "win32":
             return False
         try:
             import ctypes
@@ -1221,9 +1624,6 @@ class FFmpegToolkit(ctk.CTk):
             self.bind_all(f"<Alt-{key.upper()}>", open_menu)
 
         file_menu = self._dark_menu()
-        file_menu.add_command(label="About",
-                              command=lambda: self._build_welcome_splash(at_startup=False))
-        file_menu.add_separator()
         # Close after the menu has finished closing, not from inside it.
         file_menu.add_command(label="Exit", command=lambda: self.after(10, self._on_app_close))
         add_menu("File", file_menu, "f")
@@ -1243,6 +1643,13 @@ class FFmpegToolkit(ctk.CTk):
                     command=lambda n=name: self._show_panel(n)
                 )
         add_menu("Operations", operations_menu, "o")
+
+        help_menu = self._dark_menu()
+        help_menu.add_command(label="About FFmpeg Toolkit", underline=0,
+                              command=lambda: self.after(10, self._show_about_dialog))
+        help_menu.add_command(label="Support FFmpeg Toolkit ☕…", underline=0,
+                              command=lambda: self.after(10, self._show_support_dialog))
+        add_menu("Help", help_menu, "h")
 
     def _build_ui(self):
         self._menu_strip = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
@@ -1420,8 +1827,8 @@ class FFmpegToolkit(ctk.CTk):
 
     def _build_welcome_splash(self, at_startup=True):
         """The welcome screen, overlaid on the whole window. Shown at startup
-        (unless turned off) and again from File > About (at_startup=False),
-        which skips the startup ffmpeg checks when it's closed."""
+        (unless turned off). at_startup=False skips the startup ffmpeg checks
+        when it's closed. Help > About uses the smaller _show_about_dialog."""
         existing = getattr(self, "_welcome_frame", None)
         if existing is not None and existing.winfo_exists():
             existing.lift()
@@ -1740,6 +2147,151 @@ class FFmpegToolkit(ctk.CTk):
         dialog.transient(self)
         dialog.after(10, dialog.lift)
         dialog.grab_set()
+
+    def _open_small_dialog(self, title):
+        """A fixed-size dark dialog, hidden until _finish_small_dialog has
+        centred it over the app. Returns (dialog, body frame)."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(title)
+        dialog.resizable(False, False)
+        dialog.withdraw()
+        body = ctk.CTkFrame(dialog, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=26, pady=(18, 20))
+        return dialog, body
+
+    def _finish_small_dialog(self, dialog, close_button):
+        dialog.update_idletasks()
+        width, height = dialog.winfo_reqwidth(), dialog.winfo_reqheight()
+        x = self.winfo_rootx() + (self.winfo_width() - width) // 2
+        y = self.winfo_rooty() + (self.winfo_height() - height) // 2
+        dialog.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+        dialog.deiconify()
+        dialog.bind("<Escape>", lambda _e: dialog.destroy())
+        dialog.bind("<Return>", lambda _e: dialog.destroy())
+        dialog.transient(self)
+        dialog.after(10, dialog.lift)
+        dialog.after(20, close_button.focus_set)
+        dialog.grab_set()
+
+    def _make_link(self, parent, text, url, size=11, color=LINK, bold=False):
+        """A clickable underlined link that turns orange on hover."""
+        link = ctk.CTkLabel(
+            parent, text=text, text_color=color, cursor="hand2",
+            font=ctk.CTkFont(size=size, underline=True, weight="bold" if bold else "normal"),
+        )
+        link.bind("<Button-1>", lambda _e: webbrowser.open(url))
+        link.bind("<Enter>", lambda _e: link.configure(text_color=COFFEE))
+        link.bind("<Leave>", lambda _e: link.configure(text_color=color))
+        return link
+
+    def _show_about_dialog(self):
+        """Help > About: a compact version of the welcome screen."""
+        dialog, body = self._open_small_dialog("About FFmpeg Toolkit")
+
+        header = ctk.CTkFrame(body, fg_color="transparent")
+        header.pack(fill="x")
+        if self._app_logo_image is not None:
+            logo = ctk.CTkImage(
+                light_image=self._app_logo_image.cget("light_image"),
+                dark_image=self._app_logo_image.cget("dark_image"), size=(64, 64),
+            )
+            ctk.CTkLabel(header, text="", image=logo).pack(side="left", padx=(0, 14))
+        titles = ctk.CTkFrame(header, fg_color="transparent")
+        titles.pack(side="left", fill="y")
+        ctk.CTkLabel(
+            titles, text="FFmpeg Toolkit", text_color="#ffffff",
+            font=ctk.CTkFont(size=22, weight="bold"),
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            titles, text=f"Version {APP_VERSION}  •  Built {BUILD_DATE}",
+            font=ctk.CTkFont(size=11), text_color=MUTED,
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            titles, text="Developed by Adrian Newington  •  JELLY-JAZZ SOFTWARE",
+            font=ctk.CTkFont(size=11), text_color=MUTED,
+        ).pack(anchor="w")
+
+        links = ctk.CTkFrame(body, fg_color="transparent")
+        links.pack(fill="x", pady=(14, 0))
+        self._make_link(
+            links, "github.com/SunflowerGUY", "https://github.com/SunflowerGUY"
+        ).pack(anchor="w")
+        self._make_link(
+            links, "☕  Enjoying it? Buy us a coffee", DONATE_URL,
+            size=12, color=COFFEE, bold=True,
+        ).pack(anchor="w", pady=(4, 0))
+
+        ctk.CTkFrame(body, height=1, fg_color=BORDER).pack(fill="x", pady=14)
+
+        powered = ctk.CTkFrame(body, fg_color="transparent")
+        powered.pack(anchor="w")
+        # Plain U+2665 heart: Tk can't draw the colour emoji version.
+        ctk.CTkLabel(
+            powered, text="♥", font=ctk.CTkFont(size=14), text_color=RED
+        ).pack(side="left", padx=(0, 6))
+        ctk.CTkLabel(
+            powered, text="Powered by FFmpeg", text_color=MUTED,
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).pack(side="left")
+        ctk.CTkLabel(
+            body,
+            text="This toolkit is simply a wrapper. The real magic is the work of the "
+                 "FFmpeg developers and community, whose generous open-source efforts "
+                 "have opened doors for developers everywhere to build tools like this "
+                 "one. Thank you.",
+            font=ctk.CTkFont(size=11), text_color=MUTED,
+            wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(4, 0))
+        self._make_link(body, "ffmpeg.org", "https://ffmpeg.org").pack(anchor="w", pady=(2, 0))
+        ctk.CTkLabel(
+            body,
+            text="FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.",
+            font=ctk.CTkFont(size=9), text_color=FAINT,
+        ).pack(anchor="w", pady=(2, 0))
+
+        bottom = ctk.CTkFrame(body, fg_color="transparent")
+        bottom.pack(fill="x", pady=(16, 0))
+        ctk.CTkCheckBox(
+            bottom, text="Show the welcome screen at startup",
+            variable=self._show_splash_var, font=ctk.CTkFont(size=11),
+            text_color=MUTED, checkbox_width=16, checkbox_height=16,
+        ).pack(side="left")
+        close = ctk.CTkButton(bottom, text="Close", width=90, command=dialog.destroy)
+        close.pack(side="right")
+
+        dialog._logo = self._app_logo_image  # keep the image alive with the dialog
+        self._finish_small_dialog(dialog, close)
+
+    def _show_support_dialog(self):
+        """Help > Support: a friendly, no-pressure invitation to donate
+        (from coffee_support.py, restyled for the dashboard look)."""
+        dialog, body = self._open_small_dialog("Support FFmpeg Toolkit")
+
+        ctk.CTkLabel(
+            body, text="☕  Buy us a coffee", text_color="#ffffff",
+            font=ctk.CTkFont(size=20, weight="bold"),
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            body,
+            text="FFmpeg Toolkit is free and open source, brought to you by JELLY JAZZ.\n\n"
+                 "If it's useful to you, you can buy us a coffee - any amount, any time, "
+                 "entirely optional. It helps keep the music and the app going.",
+            wraplength=420, justify="left",
+        ).pack(anchor="w", pady=(10, 14))
+        ctk.CTkLabel(
+            body, text="Click the link to open our PayPal page:", text_color=MUTED,
+        ).pack(anchor="w")
+        self._make_link(
+            body, DONATE_URL.replace("https://", ""), DONATE_URL, size=16, bold=True,
+        ).pack(anchor="w", pady=(2, 0))
+        ctk.CTkLabel(
+            body, text="(opens in your web browser)", text_color=MUTED,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", pady=(2, 0))
+
+        close = ctk.CTkButton(body, text="Close", width=90, command=dialog.destroy)
+        close.pack(anchor="e", pady=(18, 0))
+        self._finish_small_dialog(dialog, close)
 
     def _embed_help_icon(self, log_box, index="1.0", size=16):
         """Embeds the generic-info.png icon directly into a log textbox at
@@ -3227,9 +3779,9 @@ class FFmpegToolkit(ctk.CTk):
             ctk.CTkLabel(info, text="How it works", anchor="w",
                          font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(8, 2))
             for heading, body in (
-                ("Crop", "Trims the black edges off the picture. Frame size shrinks."),
-                ("Stretch", "Enlarges what's left to fill the frame again. "
-                            "Frame size preserved."),
+                ("Crop", "Trims the Black Edges from the picture. \n(Frame size shrinks.)"),
+                ("Stretch", "Pushes Black Edges out of frame.\n"
+                            "(Frame size preserved.)"),
             ):
                 ctk.CTkLabel(info, text=heading, anchor="w", text_color=BLUE_HOVER,
                              font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10)
@@ -4437,14 +4989,7 @@ class FFmpegToolkit(ctk.CTk):
                 opts["preview_label"].pack(fill="both", expand=True)
 
             def on_video_host_configure(event):
-                hwnd = state.get("embedded_hwnd")
-                if not hwnd or sys.platform != "win32":
-                    return
-                try:
-                    import ctypes
-                    ctypes.windll.user32.MoveWindow(hwnd, 0, 0, event.width, event.height, True)
-                except Exception:
-                    pass
+                self._move_embedded_window(state.get("embedded_hwnd"), event.width, event.height)
 
             video_host.bind("<Configure>", on_video_host_configure)
 
@@ -4758,14 +5303,50 @@ class FFmpegToolkit(ctk.CTk):
                         volume_btn.configure(state="disabled")
                 self._run_on_main(finished)
 
-            def try_embed(window_title, attempts=25):
+            def catch_linux_window(window_title, pid, host):
+                """Move ffplay's window into the panel while it's still hidden,
+                so it never appears on the desktop. Returns at once when it's
+                caught: the caller then shows it in the panel, which ffplay
+                waits for before it draws any video. Runs in a worker."""
+                deadline = time.time() + 5
+                last_resort_at = time.time() + 3
+                while time.time() < deadline:
+                    if self._trim_play_window_title != window_title:
+                        return None
+                    # Only a quick scan of top-level windows while waiting: a
+                    # whole-desktop search can take over a second and the
+                    # hidden window would be missed (it shows within ~0.1 s).
+                    found = self._find_ffplay_hwnd(window_title, pid, deep=False)
+                    if found:
+                        if not (host[0] and X11.claim_hidden(found, *host)):
+                            # Already on screen: take it from the window
+                            # manager instead (it will be seen briefly).
+                            X11.release_from_wm(found)
+                        return found
+                    if time.time() > last_resort_at:
+                        # Not caught by now: it may have slipped past and be
+                        # showing already, so search the whole desktop once.
+                        last_resort_at = deadline
+                        found = self._find_ffplay_hwnd(window_title, pid, deep=True)
+                        if found:
+                            X11.release_from_wm(found)
+                            return found
+                    time.sleep(0.01)
+                return None
+
+            def try_embed(window_title, pid=None, host=(None, 0, 0)):
                 def worker():
                     hwnd = None
-                    for _ in range(attempts):
-                        hwnd = self._find_ffplay_hwnd(window_title)
-                        if hwnd:
-                            break
-                        time.sleep(0.15)
+                    if sys.platform.startswith("linux"):
+                        hwnd = catch_linux_window(window_title, pid, host)
+                    else:
+                        for _ in range(25):
+                            hwnd = self._find_ffplay_hwnd(window_title)
+                            if hwnd:
+                                break
+                            time.sleep(0.1)
+                    if hwnd and not sys.platform.startswith("linux"):
+                        self._prepare_embed(hwnd, *host)
 
                     def apply():
                         # Bail out quietly if playback was stopped/replaced
@@ -4788,13 +5369,11 @@ class FFmpegToolkit(ctk.CTk):
                         self._trim_play_hwnd = hwnd
                         if self._embed_external_window(hwnd, video_host):
                             state["embedded_hwnd"] = hwnd
-                            w = max(video_host.winfo_width(), 1)
-                            h = max(video_host.winfo_height(), 1)
-                            try:
-                                import ctypes
-                                ctypes.windll.user32.MoveWindow(hwnd, 0, 0, w, h, True)
-                            except Exception:
-                                pass
+                            self._move_embedded_window(
+                                hwnd,
+                                max(video_host.winfo_width(), 1),
+                                max(video_host.winfo_height(), 1),
+                            )
                         else:
                             show_preview_label()
                             log_box = opts.get("_log_box")
@@ -4841,10 +5420,23 @@ class FFmpegToolkit(ctk.CTk):
                 self._stop_trim_playback()
                 stop_ticker()
                 show_video_host()
+                video_host.update_idletasks()
+                host = (video_host.winfo_id(), video_host.winfo_width(), video_host.winfo_height())
                 window_title = f"Trim Range Preview - {os.path.basename(input_path)}"
+                if sys.platform.startswith("linux"):
+                    # The window is moved into the panel before ffplay shows
+                    # it (see try_embed), so place and size it to fill the panel.
+                    placement = ["-left", "0", "-top", "0"]
+                    if host[1] > 1 and host[2] > 1:
+                        placement += ["-x", str(host[1]), "-y", str(host[2])]
+                else:
+                    # Open off-screen, so the window isn't seen flashing up
+                    # before it's moved into the preview panel.
+                    placement = ["-left", "-10000", "-top", "-10000"]
                 cmd = [
                     player_path, "-hide_banner", "-autoexit",
                     "-window_title", window_title,
+                    *placement,
                     "-ss", self._format_seconds_as_timecode(start + offset),
                     "-t", self._format_seconds_as_timecode(segment_duration - offset),
                     input_path,
@@ -4860,18 +5452,23 @@ class FFmpegToolkit(ctk.CTk):
 
                 def worker():
                     try:
-                        process = subprocess.Popen(cmd, **PLAYER_SUBPROCESS_KWARGS)
+                        player_kwargs = dict(PLAYER_SUBPROCESS_KWARGS)
+                        if sys.platform.startswith("linux"):
+                            # On Wayland desktops, make ffplay use XWayland
+                            # like Tk does, so its window can be embedded.
+                            player_kwargs["env"] = dict(os.environ, SDL_VIDEODRIVER="x11")
+                        process = subprocess.Popen(cmd, **player_kwargs)
                     except Exception as exc:
                         if log_box:
-                            self.after(
-                                0,
-                                lambda: self._log(log_box, f"Error launching player: {exc}\n"),
-                            )
+                            # exc is cleared when the except block ends, so
+                            # build the message now, not inside the lambda.
+                            message = f"Error launching player: {exc}\n"
+                            self._run_on_main(lambda: self._log(log_box, message))
                         return
                     self._trim_play_process = process
                     self._trim_play_window_title = window_title
                     self._run_on_main(lambda: update_play_button_state(True, False))
-                    try_embed(window_title)
+                    try_embed(window_title, process.pid, host)
                     self._run_on_main(start_ticker)
                     monitor_playback(process)
 

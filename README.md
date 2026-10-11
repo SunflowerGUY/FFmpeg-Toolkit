@@ -1,6 +1,6 @@
 # FFmpeg Toolkit 🎬🔧
 
-**Version 10.3** — 10 October 2026
+**Version 10.12** — 12 October 2026
 
 A Vibe Coded, feature-rich, dark-themed desktop GUI for [FFmpeg](https://ffmpeg.org) built with Python and CustomTkinter, for **Windows** and **Linux**.
 Designed for content creators who work with audio editors and video editors such as [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve) — fix, convert, inspect and process video files without touching the command line.
@@ -13,6 +13,14 @@ Designed for content creators who work with audio editors and video editors such
 ![Main Interface](screenshots/Screenshot-v10-3-W.png)
 
 ---
+
+## 🆕 What's new in 10.12
+
+- **Linux: the Clip & Track Editor preview now plays inside the app.** Before, it couldn't find the player window, so Pause and Mute didn't work. Now the video plays in the preview panel, and Pause, Mute, Pop-out and Stop all work, with no window flashing up first.
+- **Windows: no more flash** — the player window no longer pops up for a moment before moving into the preview panel.
+- **New Help menu** — **About** is now a small window instead of covering the whole app, and **Support FFmpeg Toolkit ☕** has a link for anyone who'd like to buy us a coffee (entirely optional).
+- **App icon on every pop-up window**, instead of CustomTkinter's default icon.
+- Windows and Linux version numbers now match (10.12 / 10.12-L).
 
 ## 🆕 What's new in 10.3
 
@@ -117,7 +125,7 @@ When you pick an input file, the **Output File** box fills in a suggested name w
 ## 🚀 Quick Start (Windows)
 
 ### Option A — Download the portable EXE
-1. Go to **Releases** (right-hand side of this page) and download `ffmpeg_toolkit_v10-3-W.exe` from the **Assets** of the latest release.
+1. Go to **Releases** (right-hand side of this page) and download `ffmpeg_toolkit_v10-12-W.exe` from the **Assets** of the latest release.
 2. Put copies of `ffmpeg.exe` and `ffprobe.exe` in the same folder.
 3. Double-click the EXE — no installation needed.
 
@@ -125,13 +133,13 @@ When you pick an input file, the **Output File** box fills in a suggested name w
 
 ### Option B — Build the EXE yourself
 1. Download this repository (**Code → Download ZIP**) and extract it.
-2. Double-click `build.bat` and, when asked, enter the number shown next to `ffmpeg_toolkit_v10-3-W.py`.
-3. The finished `ffmpeg_toolkit_v10-3-W.exe` appears in the new `dist\` folder. Copy it, with `ffmpeg.exe` and `ffprobe.exe`, to any folder you like.
+2. Double-click `build.bat` and, when asked, enter the number shown next to `ffmpeg_toolkit_v10-12-W.py`.
+3. The finished `ffmpeg_toolkit_v10-12-W.exe` appears in the new `dist\` folder. Copy it, with `ffmpeg.exe` and `ffprobe.exe`, to any folder you like.
 
 ### Option C — Run from source
 ```bash
 pip install -r requirements.txt
-python ffmpeg_toolkit_v10-3-W.py
+python ffmpeg_toolkit_v10-12-W.py
 ```
 
 ---
@@ -151,7 +159,7 @@ Everything for Linux is in the **`LINUX PACKAGE`** folder.
    ./run.sh
    ```
 
-**Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v10-4-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **10.4-L**).
+**Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v10-12-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **10.12-L**).
 
 See [`LINUX PACKAGE/README.txt`](LINUX%20PACKAGE/README.txt) for troubleshooting, uninstalling and building an optional stand-alone Linux program.
 
@@ -161,7 +169,7 @@ See [`LINUX PACKAGE/README.txt`](LINUX%20PACKAGE/README.txt) for troubleshooting
 
 ```
 FFmpeg-Toolkit/
-├── ffmpeg_toolkit_v10-3-W.py    # The app (Windows)
+├── ffmpeg_toolkit_v10-12-W.py   # The app (Windows)
 ├── build.bat                    # Builds the Windows EXE with PyInstaller
 ├── generate_ico.py              # Regenerates app_icon.ico during the build
 ├── icon_source.jpg              # Artwork for the icon
@@ -173,7 +181,7 @@ FFmpeg-Toolkit/
 ├── assets/                      # Source artwork for icons embedded in the code
 ├── screenshots/                 # Images used in this README
 └── LINUX PACKAGE/
-    ├── ffmpeg_toolkit_v10-4-L.py # The app (Linux)
+    ├── ffmpeg_toolkit_v10-12-L.py # The app (Linux)
     ├── install.sh               # One-time installer
     ├── run.sh                   # Launcher (always runs the newest version)
     ├── app_icon.png             # Menu / desktop icon
@@ -210,6 +218,14 @@ GitHub: [github.com/SunflowerGUY](https://github.com/SunflowerGUY)
 ---
 
 ## 📝 Changelog
+
+**v10.12 (Windows) / v10.12-L (Linux)** — 12 October 2026
+- **Clip & Track Editor preview on Linux**: ffplay's window is now found, embedded in the preview panel and sent Pause / Mute keys through X11 (using Python's built-in ctypes, so there's nothing extra to install). The window is caught while ffplay still has it hidden, so it never appears on the desktop. ffplay runs with `SDL_VIDEODRIVER=x11` so this also works on Wayland desktops (via XWayland).
+- **Clip & Track Editor preview on Windows**: ffplay starts off-screen, so its window no longer flashes up before it's embedded.
+- **Help menu** (About moved here from File): a compact **About** window, and **Support FFmpeg Toolkit ☕** with a PayPal link. The welcome screen at startup is unchanged.
+- Every pop-up window now shows the app icon on Windows.
+- Fixed: if the preview player failed to start, the error message itself crashed instead of appearing in the log.
+- Version numbers are now the same for Windows and Linux.
 
 **v10.3 (Windows) / v10.4-L (Linux)** — 10 October 2026
 - **Video Crop & Stretch renamed Video Crop/Stretch/Resize**, with a new **Resize** menu (Keep size, 2160p … 360p, 50%, 25%). Crop, stretch and resize run in a single encode with one scale step, so there's only one generation of quality loss. The output name gets the size tag (e.g. `_stretched_480p`), and the summary warns in amber when the result is larger than the source.
