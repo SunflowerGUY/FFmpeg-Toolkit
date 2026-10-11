@@ -39,12 +39,23 @@ python3 -m venv .venv
 chmod +x run.sh
 
 say "Adding FFmpeg Toolkit to the applications menu"
+# Install the icon under its own name in the icon theme. The menu refers to it
+# by that name, not by a file path: FFmpeg Core Tools' package also has a
+# "LINUX PACKAGE/app_icon.png" in older versions, and the desktop caches icons
+# by path. The file is named tk_app_icon.png so the two packages can even
+# share a folder without one icon overwriting the other.
+ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
+mkdir -p "$ICON_DIR"
+cp -f tk_app_icon.png "$ICON_DIR/ffmpeg-toolkit.png"
+touch "$HOME/.local/share/icons/hicolor"
+gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+
 DESKTOP_ENTRY="[Desktop Entry]
 Type=Application
 Name=FFmpeg Toolkit
 Comment=Convert, fix and inspect video and audio files with ffmpeg
 Exec=\"$APP_DIR/run.sh\"
-Icon=$APP_DIR/app_icon.png
+Icon=ffmpeg-toolkit
 Terminal=false
 Categories=AudioVideo;Video;Audio;
 StartupNotify=true

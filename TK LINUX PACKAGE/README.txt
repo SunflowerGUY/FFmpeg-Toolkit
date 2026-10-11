@@ -69,6 +69,7 @@ UNINSTALL
 ---------
 Delete this folder, plus:
     ~/.local/share/applications/ffmpeg-toolkit.desktop
+    ~/.local/share/icons/hicolor/256x256/apps/ffmpeg-toolkit.png
     the ffmpeg-toolkit.desktop icon on your desktop
 ffmpeg itself can stay (other programs use it), or remove it with:
     sudo apt remove ffmpeg

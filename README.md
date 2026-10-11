@@ -146,9 +146,9 @@ python ffmpeg_toolkit_v10-12-W.py
 
 ## 🐧 Quick Start (Linux)
 
-Everything for Linux is in the **`LINUX PACKAGE`** folder.
+Everything for Linux is in the **`TK LINUX PACKAGE`** folder.
 
-1. Copy the `LINUX PACKAGE` folder to your home folder.
+1. Copy the `TK LINUX PACKAGE` folder to your home folder.
 2. Open a terminal in that folder and run:
    ```bash
    bash install.sh
@@ -161,7 +161,7 @@ Everything for Linux is in the **`LINUX PACKAGE`** folder.
 
 **Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v10-12-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **10.12-L**).
 
-See [`LINUX PACKAGE/README.txt`](LINUX%20PACKAGE/README.txt) for troubleshooting, uninstalling and building an optional stand-alone Linux program.
+See [`TK LINUX PACKAGE/README.txt`](TK%20LINUX%20PACKAGE/README.txt) for troubleshooting, uninstalling and building an optional stand-alone Linux program.
 
 ---
 
@@ -180,11 +180,11 @@ FFmpeg-Toolkit/
 ├── README.md
 ├── assets/                      # Source artwork for icons embedded in the code
 ├── screenshots/                 # Images used in this README
-└── LINUX PACKAGE/
+└── TK LINUX PACKAGE/
     ├── ffmpeg_toolkit_v10-12-L.py # The app (Linux)
     ├── install.sh               # One-time installer
     ├── run.sh                   # Launcher (always runs the newest version)
-    ├── app_icon.png             # Menu / desktop icon
+    ├── tk_app_icon.png          # Menu / desktop icon
     ├── Ffffreddy.mp4            # Easter egg
     └── README.txt               # Linux instructions
 ```
@@ -226,6 +226,7 @@ GitHub: [github.com/SunflowerGUY](https://github.com/SunflowerGUY)
 - Every pop-up window now shows the app icon on Windows.
 - Fixed: if the preview player failed to start, the error message itself crashed instead of appearing in the log.
 - Version numbers are now the same for Windows and Linux.
+- **Linux package**: the folder is now **`TK LINUX PACKAGE`** and its icon **`tk_app_icon.png`**, so it can't clash with FFmpeg Core Tools' package. `install.sh` now installs the icon under its own name (`ffmpeg-toolkit`) in your icon theme, so the menu, desktop and taskbar always show the Toolkit's icon.
 
 **v10.3 (Windows) / v10.4-L (Linux)** — 10 October 2026
 - **Video Crop & Stretch renamed Video Crop/Stretch/Resize**, with a new **Resize** menu (Keep size, 2160p … 360p, 50%, 25%). Crop, stretch and resize run in a single encode with one scale step, so there's only one generation of quality loss. The output name gets the size tag (e.g. `_stretched_480p`), and the summary warns in amber when the result is larger than the source.
