@@ -9,8 +9,8 @@ Designed for content creators who work with audio editors and video editors such
 
 ## 📸 Screenshot
 
-**Main Interface — v10.3 (Video Crop/Stretch/Resize)**
-![Main Interface](screenshots/Screenshot-v10-3-W.png)
+**Main Interface — v10.12 (Video Crop/Stretch/Resize)**
+![Main Interface](screenshots/Screenshot-v10-12-W.png)
 
 ---
 
