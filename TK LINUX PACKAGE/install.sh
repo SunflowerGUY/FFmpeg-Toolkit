@@ -34,7 +34,7 @@ sudo apt-get install -y ffmpeg python3 python3-tk python3-venv fonts-dejavu-core
 say "Creating the app's Python environment in: $APP_DIR/.venv"
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install --upgrade customtkinter pillow
+.venv/bin/python -m pip install --upgrade customtkinter pillow tkinterdnd2
 
 chmod +x run.sh
 
@@ -78,5 +78,6 @@ fi
 say "Checking the install"
 ffmpeg -hide_banner -version | head -n 1
 .venv/bin/python -c "import tkinter, customtkinter, PIL; print('Python add-ons OK (Tk', tkinter.TkVersion, ')')"
+.venv/bin/python -c "import tkinterdnd2" 2>/dev/null && echo "tkinterdnd2 OK (drag and drop)" || echo "tkinterdnd2 missing: everything works except dropping files on the input boxes"
 
 say "Done! Start FFmpeg Toolkit from the applications menu, the desktop icon, or:  ./run.sh"

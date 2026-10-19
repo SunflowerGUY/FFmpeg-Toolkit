@@ -52,7 +52,7 @@ echo.
 
 :: --- Install required packages ---
 echo [1/4] Installing dependencies...
-pip install pyinstaller customtkinter Pillow
+pip install pyinstaller customtkinter Pillow tkinterdnd2
 if %ERRORLEVEL% neq 0 echo ERROR: pip install failed. Make sure Python is on PATH.& pause& exit /b 1
 echo.
 
@@ -72,6 +72,7 @@ python -m PyInstaller ^
     --icon="app_icon.ico" ^
     --add-data "app_icon.ico;." ^
     --collect-data customtkinter ^
+    --collect-all tkinterdnd2 ^
     "!chosen_script!"
 
 if %ERRORLEVEL% neq 0 goto build_failed

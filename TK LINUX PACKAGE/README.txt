@@ -35,7 +35,6 @@ the newest version, so nothing else needs changing. You can delete old ones.
 
 DIFFERENCES FROM WINDOWS
 ------------------------
-- The video preview plays in its own window instead of inside the app.
 - "Open Log in Text Editor" opens your system's text editor instead of Notepad.
 - The folder browser starts at / (the top of the file system) instead of drive letters.
 
@@ -48,10 +47,11 @@ single self-contained program instead, in a terminal in this folder:
     .venv/bin/python -m pip install pyinstaller
     sudo apt install -y binutils
     .venv/bin/python -m PyInstaller --noconfirm --onefile --windowed \
-        --name ffmpeg_toolkit_v10-12-L --collect-data customtkinter \
-        ffmpeg_toolkit_v10-12-L.py
+        --name ffmpeg_toolkit_v11-0-L --collect-data customtkinter \
+        --collect-all tkinterdnd2 \
+        ffmpeg_toolkit_v11-0-L.py
 
-The result is dist/ffmpeg_toolkit_v10-12-L (Linux programs have no .exe).
+The result is dist/ffmpeg_toolkit_v11-0-L (Linux programs have no .exe).
 - It uses the ffmpeg that install.sh installed; ffmpeg isn't bundled inside it.
 - A program built on one Mint/Ubuntu version runs on that version and newer,
   so build on the oldest version you want to support.

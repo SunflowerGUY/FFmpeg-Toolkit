@@ -1,6 +1,6 @@
 # FFmpeg Toolkit 🎬🔧
 
-**Version 10.12** — 12 October 2026
+**Version 11.0** — 19 October 2026
 
 A Vibe Coded, feature-rich, dark-themed desktop GUI for [FFmpeg](https://ffmpeg.org) built with Python and CustomTkinter, for **Windows** and **Linux**.
 Designed for content creators who work with audio editors and video editors such as [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve) — fix, convert, inspect and process video files without touching the command line.
@@ -13,6 +13,32 @@ Designed for content creators who work with audio editors and video editors such
 ![Main Interface](screenshots/Screenshot-v10-12-W.png)
 
 ---
+
+## 🆕 What's new in 11.0
+
+- **NVIDIA GPU encoding** — Proxy Creator, Video Scaler and Basic Video Editor offer **H.264 (NVIDIA GPU)** and **H.265 (NVIDIA GPU)** when your PC has an NVIDIA graphics card FFmpeg can use (checked automatically at startup). About 3× faster, with bigger files at the same quality.
+- **Drag and drop** — drop a video from Explorer onto any **Input File** box to open it, or a folder onto the batch tools' source folder box.
+- **Clip & Track Editor: a new Trim Video panel** — step buttons (**-10s … +10s**, one frame at a time), **Set Start Position** / **Set End Position**, a trim bar showing the part kept in green and the parts cut in yellow-and-black hazard stripes, and **Save Current Frame as Image**.
+- **Better Contrast** in the Basic Video Editor: black and white stay put and the curve pivots on the video's own average level, so dark films get deeper darks and brighter lights instead of just getting darker.
+- **Scopes** — tick **Show scopes** in the Basic Video Editor for a floating waveform and RGB Parade of the preview, with darkest / brightest readouts and crushed / clipped warnings.
+- **Audio Accessibility: pick subtitle tracks** with a tick box each; the report lists each sound setting on its own line, which subtitles were kept, and names MP4 files as MP4 (not "QuickTime / MOV").
+- **Output names in one set of brackets** — `Holiday [cropped_colour_720p].mp4` instead of `Holiday_cropped_colour_720p.mp4`.
+- **A bigger window and editor preview** — the app opens 1400 px wide and the Basic Video Editor's preview is a third larger (512×384).
+- **Yellow tooltips**, an **orange progress bar** while working, the **mouse wheel no longer nudges** settings sliders, and closing the app **asks first** while a job is running.
+
+## 🆕 What's new in 10.14
+
+- **Audio Accessibility fixes**: with **Stereo Downmix**, the new file now really is at the LUFS target you chose, and **PCM** files are no longer saved at 192 kHz (about 4× bigger than needed). See the [Changelog](#-changelog).
+
+## 🆕 What's new in 10.13
+
+- **Video Crop/Stretch/Resize is now the Basic Video Editor**, with colour controls beside the preview:
+  - **Gamma Adjust** — Red, Green and Blue sliders that lighten (+) or darken (-) the mid-tones. **Linked** moves all three together; **Unlinked** lets you warm up or cool down the picture one colour at a time.
+  - **Basics** — Brightness, Contrast and Saturation sliders (-100 Saturation gives black and white).
+  - 0 means no change; double-click a slider to put it back to 0. The **After** preview shows the result, and **Reset** undoes all trimming and colour changes.
+- **Run and Abort** now sit at the top right of the Options card, above the sliders.
+- **"How it works"** is now an ⓘ icon next to Crop Mode / Stretch Mode that opens a pop-up.
+- **Bigger window** — the app now opens at 1200×880 (smaller screens get a window that fits).
 
 ## 🆕 What's new in 10.12
 
@@ -59,6 +85,8 @@ See the [Changelog](#-changelog) for the details, including the 9.3 fixes.
 
 ## ✨ Features
 
+> 📂 Drag a video from Explorer onto any **Input File** box to open it.
+>
 > 🖱️ The sidebar scrolls vertically — if the window is smaller than the full tool list, a scrollbar appears so every item stays reachable.
 
 ### 🎥 Video
@@ -70,12 +98,12 @@ See the [Changelog](#-changelog) for the details, including the 9.3 fixes.
 | **Quick Fix** | Remuxes video into a new container instantly by copying all streams without re-encoding. Fixes broken file indexing. |
 | **Stubborn Fix** | Specifically optimized for DaVinci Resolve import errors. Forces a fast video stream copy but converts the audio track into uncompressed 16-bit PCM wrapped in a `.mov` container — ensuring the audio track never goes missing on the editing timeline. |
 | **Fix Timestamps** | Rebuilds corrupt or missing presentation timestamps using `+genpts+igndts`, eliminating playback stuttering and audio sync drift in Resolve. |
-| **Proxy Creator** | Generates lightweight, editing-optimized `.mov` proxies with Rec.709 colour tags (no washed-out gamma shift in Resolve) and uncompressed PCM audio for lag-free scrubbing. |
-| **Video Scaler** | Resizes a video for sharing, uploading or saving space. Resolution presets (2160p…360p) set the *short* side so portrait phone video is handled correctly; also 50% / 25% and custom sizes, with a Scale slider (×0.3 to ×3) for custom sizes. |
-| **Video Crop/Stretch/Resize** | Removes black edges from ill-formatted video files. **Stretch Mode** Pushes the Black Edges out-of-frame by stretching the picture. The frame's X/Y dimensions never change. **Crop Mode** Trims away the Black Edges, thus making the frame's X/Y dimensions smaller. Use the Arrow keys (on screen or on the keyboard) to trim in 2-pixel steps per side, always centred. Also incorporates a live Before / After preview on a checkerboard background. An optional **Resize** (2160p … 360p, 50%, 25%) happens in the same encode, so the video is only compressed once. All audio tracks are copied untouched. |
+| **Proxy Creator** | Generates lightweight, editing-optimized `.mov` proxies with Rec.709 colour tags (no washed-out gamma shift in Resolve) and uncompressed PCM audio for lag-free scrubbing. H.264 / H.265 on the CPU, or on an NVIDIA GPU when one is available. |
+| **Video Scaler** | Resizes a video for sharing, uploading or saving space. Resolution presets (2160p…360p) set the *short* side so portrait phone video is handled correctly; also 50% / 25% and custom sizes, with a Scale slider (×0.3 to ×3) for custom sizes. H.264 / H.265 on the CPU, or on an NVIDIA GPU when one is available. |
+| **Basic Video Editor** | Removes black edges from ill-formatted video files, and adjusts the picture's colour. **Stretch Mode** Pushes the Black Edges out-of-frame by stretching the picture. The frame's X/Y dimensions never change. **Crop Mode** Trims away the Black Edges, thus making the frame's X/Y dimensions smaller. Use the Arrow keys (on screen or on the keyboard) to trim in 2-pixel steps per side, always centred. Also incorporates a live Before / After preview on a checkerboard background. An optional **Resize** (2160p … 360p, 50%, 25%) happens in the same encode, so the video is only compressed once. **Gamma Adjust** (Red / Green / Blue, linked or unlinked) and **Basics** (Brightness / Contrast / Saturation) sliders change the colour in the same encode, shown live in the preview. Contrast pivots on the video's own average level, so dark films keep their shadows. **Show scopes** opens a waveform and RGB Parade of the preview. H.264 / H.265 on the CPU, or on an NVIDIA GPU when one is available. All audio tracks are copied untouched. |
 | **ProRes Export** | Converts video to Apple ProRes (Proxy / LT / 422 / HQ / 4444 / 4444 XQ). Smart colour tagging, HDR handling (keep HLG/PQ or tone-map to SDR Rec.709), constant-frame-rate conforming for phone footage, every audio track as 24-bit PCM, and an up-front output size estimate with a free-space check. |
 | **Batch ProRes Export** | The same ProRes conversion for a whole folder at once, with per-file size estimates and select all / none. |
-| **Clip & Track Editor** | Losslessly cuts a section of video and/or picks which audio and subtitle tracks to keep, without re-encoding. Built-in preview player and a range slider for the start and end points. Uses output seeking to avoid black or frozen first frames and zeroes timestamps for Resolve. |
+| **Clip & Track Editor** | Losslessly cuts a section of video and/or picks which audio and subtitle tracks to keep, without re-encoding. Built-in preview player, and a **Trim Video** panel: move the position slider (or step by 10 s, 1 s or one frame, or type a time) and click **Set Start Position** / **Set End Position**; a hazard-striped bar shows what's cut. **Save Current Frame as Image** saves the picture at that point. Uses output seeking to avoid black or frozen first frames and zeroes timestamps for Resolve. |
 | **Still Frame** | Extracts a frame-accurate single image from any timestamp using precise output seeking and high-quality scaling (`-sws_flags accurate_rnd+spline`). |
 
 ### 🎵 Audio
@@ -84,7 +112,7 @@ See the [Changelog](#-changelog) for the details, including the 9.3 fixes.
 |------|-------------|
 | **Extract Audio** | Saves an audio track as a standalone file — uncompressed WAV (PCM) or AAC (`.m4a`). Pick one language track or all tracks (one file each). Surround tracks can be saved as-is, downmixed to stereo, or reduced to the dialogue (centre) channel. |
 | **Strip Audio** | Removes the audio while keeping the video, cover art and subtitles intact (`-map 0:v -map 0:s?`). |
-| **Audio Accessibility** | Custom-built accessibility tool for those who are hard of hearing — normalizes loudness before importing into DaVinci Resolve. Choose **Dynamic Normaliser** (`dynaudnorm`) for content-adaptive smoothing, or **Loudness Compression** (`loudnorm`) targeting **-14 LUFS** (YouTube/Spotify), **-16 LUFS** (Apple Music), **-20 LUFS** (a custom preset tuned for older film dialogue), **-23 LUFS** (Broadcast/EBU R128) or **-27 LUFS** (Netflix/Amazon). Process one language track or all of them, optionally downmix surround to a clear-dialogue stereo track, and pick **PCM** or **AAC** audio in an **MKV**, **MOV** or **MP4** container. If the chosen container can't hold the file's subtitles (e.g. DVD/Blu-ray picture subtitles in MP4), you're warned **before** the run and can switch to MKV, carry on without subtitles, or cancel. Every run also writes an **`FF-Toolkit Conversion Report.txt`** documenting the input/output specs and the settings applied. |
+| **Audio Accessibility** | Custom-built accessibility tool for those who are hard of hearing — normalizes loudness before importing into DaVinci Resolve. Choose **Dynamic Normaliser** (`dynaudnorm`) for content-adaptive smoothing, or **Loudness Compression** (`loudnorm`) targeting **-14 LUFS** (YouTube/Spotify), **-16 LUFS** (Apple Music), **-20 LUFS** (a custom preset tuned for older film dialogue), **-23 LUFS** (Broadcast/EBU R128) or **-27 LUFS** (Netflix/Amazon). Process one language track or all of them, optionally downmix surround to a clear-dialogue stereo track, and pick **PCM** or **AAC** audio in an **MKV**, **MOV** or **MP4** container. Tick which subtitle tracks to keep. If the chosen container can't hold some of them (e.g. DVD/Blu-ray picture subtitles in MP4), you're warned **before** the run and can switch to MKV, leave out just those tracks, or cancel. Every run also writes an **`FF-Toolkit Conversion Report.txt`** documenting the input/output specs and the settings applied. |
 | **Batch Audio Convert** | Bulk-converts an entire folder of files (or a single file) in the background, with live progress and case-insensitive scanning. |
 
 ### 💬 Subtitles
@@ -102,7 +130,7 @@ See the [Changelog](#-changelog) for the details, including the 9.3 fixes.
 
 ### 📝 Output file names
 
-When you pick an input file, the **Output File** box fills in a suggested name with a tag describing what was done (e.g. `Movie (-23 LUFS).mkv`, `Movie_720p.mp4`). You can type any name you like instead:
+When you pick an input file, the **Output File** box fills in a suggested name with a tag describing what was done (e.g. `Movie (-23 LUFS).mkv`, `Movie [720p].mp4`; several tags share one set of brackets, as in `Movie [cropped_colour_720p].mp4`). You can type any name you like instead:
 
 - Your name is **kept** when you click elsewhere or press Run.
 - Changing an **option** (LUFS target, mode, codec, format, resolution…) brings back the suggested name, so the tag matches the new settings.
@@ -119,13 +147,15 @@ When you pick an input file, the **Output File** box fills in a suggested name w
 - **Python 3.10+** — only needed to run from source or build the Windows executable
 
 > Download FFmpeg for Windows from [ffmpeg.org/download.html](https://ffmpeg.org/download.html) (e.g. the gyan.dev "essentials" build).
+>
+> **For NVIDIA GPU encoding**, the FFmpeg build has to suit your graphics driver. Recent builds need driver 610 or newer, which older cards (e.g. the GTX 10 series) can't get. If the GPU choices don't appear, try a slightly older build, such as the [BtbN](https://github.com/BtbN/FFmpeg-Builds) build of April 2026.
 
 ---
 
 ## 🚀 Quick Start (Windows)
 
 ### Option A — Download the portable EXE
-1. Go to **Releases** (right-hand side of this page) and download `ffmpeg_toolkit_v10-12-W.exe` from the **Assets** of the latest release.
+1. Go to **Releases** (right-hand side of this page) and download `ffmpeg_toolkit_v11-0-W.exe` from the **Assets** of the latest release.
 2. Put copies of `ffmpeg.exe` and `ffprobe.exe` in the same folder.
 3. Double-click the EXE — no installation needed.
 
@@ -133,13 +163,13 @@ When you pick an input file, the **Output File** box fills in a suggested name w
 
 ### Option B — Build the EXE yourself
 1. Download this repository (**Code → Download ZIP**) and extract it.
-2. Double-click `build.bat` and, when asked, enter the number shown next to `ffmpeg_toolkit_v10-12-W.py`.
-3. The finished `ffmpeg_toolkit_v10-12-W.exe` appears in the new `dist\` folder. Copy it, with `ffmpeg.exe` and `ffprobe.exe`, to any folder you like.
+2. Double-click `build.bat` and, when asked, enter the number shown next to `ffmpeg_toolkit_v11-0-W.py`.
+3. The finished `ffmpeg_toolkit_v11-0-W.exe` appears in the new `dist\` folder. Copy it, with `ffmpeg.exe` and `ffprobe.exe`, to any folder you like.
 
 ### Option C — Run from source
 ```bash
 pip install -r requirements.txt
-python ffmpeg_toolkit_v10-12-W.py
+python ffmpeg_toolkit_v11-0-W.py
 ```
 
 ---
@@ -153,13 +183,13 @@ Everything for Linux is in the **`TK LINUX PACKAGE`** folder.
    ```bash
    bash install.sh
    ```
-   It installs FFmpeg and Python's window toolkit (asks for your password), creates a private Python environment with CustomTkinter and Pillow, and adds **FFmpeg Toolkit** to the applications menu and the desktop.
+   It installs FFmpeg and Python's window toolkit (asks for your password), creates a private Python environment with CustomTkinter, Pillow and tkinterdnd2 (for drag and drop), and adds **FFmpeg Toolkit** to the applications menu and the desktop.
 3. Start the app from the applications menu, the desktop icon, or:
    ```bash
    ./run.sh
    ```
 
-**Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v10-12-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **10.12-L**).
+**Updating an existing Linux install:** copy the new `ffmpeg_toolkit_v11-0-L.py` into the folder — no reinstall needed. `run.sh` always starts the highest-numbered version, and the title bar shows which one is running (e.g. **11.0-L**).
 
 See [`TK LINUX PACKAGE/README.txt`](TK%20LINUX%20PACKAGE/README.txt) for troubleshooting, uninstalling and building an optional stand-alone Linux program.
 
@@ -169,7 +199,7 @@ See [`TK LINUX PACKAGE/README.txt`](TK%20LINUX%20PACKAGE/README.txt) for trouble
 
 ```
 FFmpeg-Toolkit/
-├── ffmpeg_toolkit_v10-12-W.py   # The app (Windows)
+├── ffmpeg_toolkit_v11-0-W.py   # The app (Windows)
 ├── build.bat                    # Builds the Windows EXE with PyInstaller
 ├── generate_ico.py              # Regenerates app_icon.ico during the build
 ├── icon_source.jpg              # Artwork for the icon
@@ -181,7 +211,7 @@ FFmpeg-Toolkit/
 ├── assets/                      # Source artwork for icons embedded in the code
 ├── screenshots/                 # Images used in this README
 └── TK LINUX PACKAGE/
-    ├── ffmpeg_toolkit_v10-12-L.py # The app (Linux)
+    ├── ffmpeg_toolkit_v11-0-L.py # The app (Linux)
     ├── install.sh               # One-time installer
     ├── run.sh                   # Launcher (always runs the newest version)
     ├── tk_app_icon.png          # Menu / desktop icon
@@ -196,6 +226,7 @@ FFmpeg-Toolkit/
 - [Python](https://python.org)
 - [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) — modern dark-themed UI
 - [Pillow](https://python-pillow.org) — image handling
+- [tkinterdnd2](https://github.com/Eliav2/tkinterdnd2) — drag and drop
 - [FFmpeg & FFprobe](https://ffmpeg.org) — the multimedia engine underneath
 
 ---
@@ -218,6 +249,34 @@ GitHub: [github.com/SunflowerGUY](https://github.com/SunflowerGUY)
 ---
 
 ## 📝 Changelog
+
+**v11.0 (Windows) / v11.0-L (Linux)** — 19 October 2026 (changes carried over from Little Freddy 2.0)
+- **NVIDIA GPU encoding**: Proxy Creator, Video Scaler and Basic Video Editor gain the Codec choices **H.264 (NVIDIA GPU)** / **H.265 (NVIDIA GPU)** (`h264_nvenc` / `hevc_nvenc` with `-rc vbr -cq <CRF> -b:v 0` and a matching `-preset p1`–`p7`). A tiny test encode at startup (and when the FFmpeg location changes in Settings) checks whether they work; they only appear when they do. If they stop working, a menu set to one goes back to the same format on the CPU.
+- **Drag and drop** (tkinterdnd2 add-on): drop a file on any Input File box (every single-file tool, Inspect File, Custom Command) to open it, as Browse would. The batch tools' source folder boxes take a dropped folder (or a dropped file's folder). The box's border turns blue during a drag; drops are refused while a job runs. Without the add-on everything else works as before. `build.bat`, `requirements.txt` and the Linux `install.sh` include it.
+- **Clip & Track Editor: Trim Video panel**, replacing the two-handle range slider. A position slider with **-10s / -1s / -1f / +1f / +1s / +10s** buttons and a time box (type a time, press Enter) picks the frame shown; **Set Start Position** / **Set End Position** (or the `[` and `]` keys) trim there, and **Clear** keeps the whole video. The bar shows the part kept in green and the parts cut in yellow-and-black hazard stripes. The panel shortens its labels to fit narrower windows. **Save Current Frame as Image** saves the picture at the slider's point (PNG or JPEG, named e.g. `Holiday [frame_00-01-23_40].png`). Play starts from the slider's point when it's inside the trimmed part. Comma / full stop step a second.
+- **Contrast fixed (Basic Video Editor)**: replaced `eq` contrast (a straight line about mid-grey, which on dark films acted like Brightness) with an S-curve on the luma (`lutyuv`), black and white held, pivoting on the video's average level, measured in the background when a video is opened. The preview applies the same curve.
+- **Scopes (Basic Video Editor)**: **Show scopes** opens an always-on-top window over the preview with a luminance waveform, an RGB Parade, and darkest / brightest levels plus % crushed to black / clipped to white (amber at 1% or more). It measures the preview (Before or After), ignoring letterbox bars. It closes when you switch to another tool and reopens when you come back; the setting is remembered.
+- **Audio Accessibility**: a tick box per subtitle track (number, language, title, format, forced/default) with All / None. If the format can't hold some ticked tracks, *No* now leaves out only those. The conversion report lists the picture (copied), the Sound settings one per line under "Sound: adjusted", and which subtitle tracks were kept.
+- **Report Container line** names the real container (MP4, MOV, M4V, 3GP, MKV, WebM…) from the file's brand, instead of "QuickTime / MOV" for every MP4.
+- **Output names**: tags go in one set of brackets: `Holiday [stretched_colour_720p].mkv`, `Movie [prores].mov`, `Movie [extracted_0_eng].wav`. Audio Accessibility keeps its `(-16 LUFS)` style.
+- **Bigger window and preview**: the app opens 1400 px wide (1200 before; less on smaller screens), and the Basic Video Editor's preview grows from 384×288 to 512×384. The minimum window width is now 1320 px (was 950), the narrowest at which the preview, key pad and colour sliders all fit.
+- **Sidebar**: Clip & Track Editor now sits directly under Basic Video Editor.
+- **Close confirmation**: closing the app while a job is running asks first (Yes stops FFmpeg).
+- **Look**: tooltips are yellow with black text; the progress bar is orange while working.
+- **Mouse wheel** no longer moves the CRF, scale and colour sliders (the time sliders still take it).
+
+**v10.14 (Windows) / v10.14-L (Linux)** — 13 October 2026
+- **Audio Accessibility — Stereo Downmix now hits the LUFS target.** The sound is downmixed to stereo *before* it's normalised, so the new file is at the loudness you chose. Before, it was normalised as surround and then downmixed, which left it off target (a 5.1 track set to -20 LUFS came out between -18 and -25 LUFS; it now measures -20.0).
+- **Audio Accessibility — PCM no longer saved at 192 kHz.** Loudness Compression made FFmpeg raise the sample rate to 192 kHz and nothing lowered it again, so PCM files came out about 4× bigger than needed. Each track is now put back to its own sample rate (48 kHz if it's unknown).
+
+**v10.13 (Windows) / v10.13-L (Linux)** — 12 October 2026
+- **Video Crop/Stretch/Resize renamed Basic Video Editor.**
+- **Gamma Adjust**: Red / Green / Blue sliders from -50 to +100, with 0 a third of the way along (gamma 0.5 to 2.0). A **Linked / Unlinked** switch; linking joins the three at their average.
+- **Basics**: Brightness, Contrast and Saturation sliders from -100 to +100, with 0 in the middle. Icons from the new slider artwork.
+- The colour changes run in the same encode as the crop and resize (`eq` for the Basics, then `lutrgb` gamma per colour), so there's still only one generation of loss. The output is 8-bit when colour is used. The preview applies the same maths, and the output name gets `_colour`.
+- Double-click a slider to reset it; **Reset** now undoes trimming and colour.
+- **Abort | Run** moved to the Options card's title row; the "How it works" panel became an ⓘ pop-up; the crop controls are centred beside the preview.
+- **Window** opens at 1200×880, capped to the screen height.
 
 **v10.12 (Windows) / v10.12-L (Linux)** — 12 October 2026
 - **Clip & Track Editor preview on Linux**: ffplay's window is now found, embedded in the preview panel and sent Pause / Mute keys through X11 (using Python's built-in ctypes, so there's nothing extra to install). The window is caught while ffplay still has it hidden, so it never appears on the desktop. ffplay runs with `SDL_VIDEODRIVER=x11` so this also works on Wayland desktops (via XWayland).
